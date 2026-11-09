@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "student4-stablecoin-paper-trading"
+version = "0.1.0"
+description = "Stablecoin data, a rule-based agent, and BTC/USD paper trading"
+requires-python = ">=3.10"
+dependencies = []
+
+[tool.setuptools]
+license-files = ["licenses/pharos-MIT.txt"]
+
+[tool.setuptools.packages.find]
+include = ["student4*"]
+
+[tool.setuptools.package-data]
+student4 = ["fixtures/*.json"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
