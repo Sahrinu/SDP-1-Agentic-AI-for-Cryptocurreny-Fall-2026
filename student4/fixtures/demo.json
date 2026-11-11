@@ -1,0 +1,41 @@
+{
+  "description": "Entirely synthetic classroom scenario. BTC prices are supplied only for the Student 4 component demo.",
+  "steps": [
+    {
+      "timestamp": "2026-01-01T12:00:00+00:00",
+      "btc_price_usd": "60000",
+      "coins": {
+        "tether": {"usd": 1.0, "usd_market_cap": 100000000000, "usd_24h_vol": 40000000000},
+        "usd-coin": {"usd": 1.0, "usd_market_cap": 40000000000, "usd_24h_vol": 5000000000},
+        "dai": {"usd": 1.0, "usd_market_cap": 5000000000, "usd_24h_vol": 100000000}
+      }
+    },
+    {
+      "timestamp": "2026-01-02T12:00:00+00:00",
+      "btc_price_usd": "61000",
+      "coins": {
+        "tether": {"usd": 1.001, "usd_market_cap": 102000000000, "usd_24h_vol": 41000000000},
+        "usd-coin": {"usd": 0.999, "usd_market_cap": 40800000000, "usd_24h_vol": 5100000000},
+        "dai": {"usd": 1.0, "usd_market_cap": 5100000000, "usd_24h_vol": 110000000}
+      }
+    },
+    {
+      "timestamp": "2026-01-03T12:00:00+00:00",
+      "btc_price_usd": "62000",
+      "coins": {
+        "tether": {"usd": 1.0, "usd_market_cap": 102000000000, "usd_24h_vol": 42000000000},
+        "usd-coin": {"usd": 0.99, "usd_market_cap": 40800000000, "usd_24h_vol": 6000000000},
+        "dai": {"usd": 1.0, "usd_market_cap": 5100000000, "usd_24h_vol": 120000000}
+      }
+    },
+    {
+      "timestamp": "2026-01-04T12:00:00+00:00",
+      "btc_price_usd": "59000",
+      "coins": {
+        "tether": {"usd": 1.0, "usd_market_cap": 100000000000, "usd_24h_vol": 45000000000},
+        "usd-coin": {"usd": 0.97, "usd_market_cap": 39000000000, "usd_24h_vol": 8000000000},
+        "dai": {"usd": 1.0, "usd_market_cap": 5000000000, "usd_24h_vol": 140000000}
+      }
+    }
+  ]
+}
