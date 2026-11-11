@@ -1,0 +1,21 @@
+{
+  "agent": "Mood Specialist",
+  "prediction_time": "2026-11-09T13:08:36.530362Z",
+  "target_time": "2026-11-10T13:08:36.530362Z",
+  "probability_up": 0.52,
+  "explanation": "The Alternative.me Fear & Greed Index is currently at 29 ('Fear'), showing modest stabilization following a dip into 'Extreme Fear' (25) on 2026-11-07. Over the last 7 days, sentiment has averaged 31.4, remaining deeply depressed compared to the 30-day mean of 47.5. Persistent fear levels often reflect extended seller exhaustion and can precede short-term mean-reversion bounces or consolidation in Bitcoin price. However, sustained negative sentiment also indicates ongoing downside momentum. Weighing the recent stabilization off local extremes against broader bearish sentiment, the 24-hour probability of an upward move is assessed slightly above neutral at 0.52.",
+  "evidence_ids": [
+    "alternative-me-fng-2026-11-03T00:00:00Z",
+    "alternative-me-fng-2026-11-04T00:00:00Z",
+    "alternative-me-fng-2026-11-05T00:00:00Z",
+    "alternative-me-fng-2026-11-06T00:00:00Z",
+    "alternative-me-fng-2026-11-07T00:00:00Z",
+    "alternative-me-fng-2026-11-08T00:00:00Z",
+    "alternative-me-fng-2026-11-09T00:00:00Z"
+  ],
+  "data_status": "sufficient_data",
+  "limitations": [
+    "Fear & Greed Index reflects sentiment and volatility metrics rather than direct market order flow.",
+    "Index updates daily at midnight UTC, so intraday shifts occurring closer to prediction_time are not captured."
+  ]
+}

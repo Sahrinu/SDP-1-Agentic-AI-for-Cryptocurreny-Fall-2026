@@ -1,0 +1,18 @@
+{
+  "agent": "news_specialist",
+  "prediction_time": "2026-11-11T21:06:01.324032Z",
+  "target_time": "2026-11-12T21:06:01.324032Z",
+  "probability_up": 0.44,
+  "explanation": "Near-term 24-hour market sentiment is tilted slightly negative due to immediate pressure surrounding the MSCI decision regarding MicroStrategy and Bitcoin treasury index inclusion, which has triggered capitulation-level selling among corporate holders. A reported high-severity vulnerability in Bitcoin mining software also introduces minor operational friction. While Deutsche Bank opening custody services provides an institutional counterweight, the imminent index decision creates overriding short-term downside risk over the next 24 hours.",
+  "evidence_ids": [
+    "https://www.thestreet.com/crypto/markets/strategy-stock-under-pressure-ahead-of-key-msci-decision-today",
+    "https://beincrypto.com/bitcoin-treasury-capitulation-msci-strategy/",
+    "https://unchainedcrypto.com/deutsche-banks-bitcoin-and-ether-custody-is-open-to-clients-bank-says/",
+    "https://www.thestreet.com/crypto/markets/bitcoin-mining-software-reveals-high-severity-security-flaw"
+  ],
+  "data_status": "sufficient_data",
+  "limitations": [
+    "Articles discussing multi-year annual loss cycles and state-level legislative proposals were excluded as non-actionable over the 24-hour horizon.",
+    "Two pieces covering the MicroStrategy MSCI index rebalance test were synthesized as a single unified signal."
+  ]
+}

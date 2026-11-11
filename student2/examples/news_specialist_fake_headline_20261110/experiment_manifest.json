@@ -1,0 +1,19 @@
+{
+  "experiment_id": "news_specialist_fake_headline_20261110",
+  "baseline_source": "tradingagents/agents/news_specialist_live_result.json",
+  "article_source": "tradingagents/agents/news_specialist_accepted_evidence.json",
+  "prediction_time": "2026-11-07T21:51:27.932434Z",
+  "target_time": "2026-11-08T21:51:27.932434Z",
+  "injected_article": {
+    "evidence_id": "experiment-article-021",
+    "label": "synthetic",
+    "synthetic": true,
+    "publisher": "Experiment Desk",
+    "title": "Large Bitcoin holder announces sale of 20,000 BTC within 24 hours",
+    "url": "",
+    "publication_timestamp": "2026-11-07T18:30:00Z",
+    "summary": "A large Bitcoin holder announced plans to sell 20,000 BTC over the next 24 hours, potentially increasing near-term selling pressure.",
+    "notes": "The synthetic label is recorded only in this manifest and is intentionally not included in the model input payload."
+  },
+  "model_input_excludes_label": true
+}
