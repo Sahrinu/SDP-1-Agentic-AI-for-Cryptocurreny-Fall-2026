@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 
 import pytest
 
-from student2.agents.news_specialist import (
+from crypto_trading.agents.news_specialist import (
     NewsSpecialistResult,
     build_gemini_prompt,
     filter_articles_for_prediction,

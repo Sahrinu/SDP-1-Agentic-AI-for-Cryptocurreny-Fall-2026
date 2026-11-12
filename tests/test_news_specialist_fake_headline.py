@@ -4,7 +4,7 @@ import json
 
 import pytest
 
-from student2.agents.news_specialist import filter_articles_for_prediction
+from crypto_trading.agents.news_specialist import filter_articles_for_prediction
 
 from tests.news_specialist_fake_headline_runner import build_experiment_prompt, generate_fixtures, _run_pair
 

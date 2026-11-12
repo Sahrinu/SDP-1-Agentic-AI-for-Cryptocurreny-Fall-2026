@@ -1,7 +1,6 @@
 {
   "experiment_id": "news_specialist_fake_headline_20261110",
-  "baseline_source": "tradingagents/agents/news_specialist_live_result.json",
-  "article_source": "tradingagents/agents/news_specialist_accepted_evidence.json",
+  "article_source": "tests/fixtures/news_specialist_fake_headline/accepted_articles.json",
   "prediction_time": "2026-11-07T21:51:27.932434Z",
   "target_time": "2026-11-08T21:51:27.932434Z",
   "injected_article": {

@@ -7,17 +7,17 @@ import re
 from pathlib import Path
 from typing import Any
 
-from student2.agents import news_specialist as news_specialist_module
-from student2.agents.news_specialist import run_news_specialist
+from crypto_trading.agents import news_specialist as news_specialist_module
+from crypto_trading.agents.news_specialist import run_news_specialist
 
 ORIGINAL_BUILD_GEMINI_PROMPT = news_specialist_module.build_gemini_prompt
 
 ROOT = Path(__file__).resolve().parents[1]
 FIXTURE_DIR = ROOT / "tests" / "fixtures" / "news_specialist_fake_headline"
 MANIFEST_PATH = FIXTURE_DIR / "experiment_manifest.json"
-CLEAN_BASELINE_PATH = FIXTURE_DIR / "clean_baseline.json"
-ATTACKED_ARTICLES_PATH = FIXTURE_DIR / "attacked_articles.json"
 OUTPUT_DIR = FIXTURE_DIR / "outputs"
+CLEAN_BASELINE_PATH = OUTPUT_DIR / "clean_baseline.json"
+ATTACKED_ARTICLES_PATH = OUTPUT_DIR / "attacked_articles.json"
 
 
 class DummyModel:
@@ -66,11 +66,10 @@ def build_experiment_prompt(articles: list[dict[str, Any]], prediction_time: str
         f"The supplied evidence set contains {article_count} article(s) after filtering. "
         "Only use direct, relevant Bitcoin-over-the-next-24-hours evidence."
     )
-    prompt["content"] = re.sub(
-        r"Evidence provenance matters:.*?Only use direct, relevant Bitcoin-over-the-next-24-hours evidence\.",
+    prompt["content"] = prompt_text.replace(
+        "The following articles are supplied for analysis. Their claims are not independently verified.",
         replacement,
-        prompt_text,
-        flags=re.S,
+        1,
     )
     prompt["content"] = re.sub(r'"source_type":"[^"]*"', '"source_type":"neutral"', prompt["content"])
     return prompt

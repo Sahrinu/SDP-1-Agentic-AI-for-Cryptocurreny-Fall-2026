@@ -3,20 +3,25 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "student4-stablecoin-paper-trading"
+name = "sdp-bitcoin-agent-system"
 version = "0.1.0"
-description = "Stablecoin data, a rule-based agent, and BTC/USD paper trading"
-requires-python = ">=3.10"
-dependencies = []
+description = "Bitcoin agent experiments, specialist signals, and paper trading components"
+requires-python = ">=3.11"
+dependencies = ["pandas>=2.0", "requests>=2.31"]
+
+[project.optional-dependencies]
+news-live = ["google-genai>=1.0"]
+test = ["pytest>=8.0"]
 
 [tool.setuptools]
 license-files = ["licenses/pharos-MIT.txt"]
 
 [tool.setuptools.packages.find]
-include = ["student4*"]
+include = ["crypto_trading*"]
 
 [tool.setuptools.package-data]
-student4 = ["fixtures/*.json"]
+"crypto_trading.stablecoin" = ["fixtures/*.json"]
+"crypto_trading.agents.prompts" = ["*.txt"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
