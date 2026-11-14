@@ -1,0 +1,12 @@
+{
+  "agent": "News Specialist",
+  "prediction_time": "2026-11-07T21:51:27.932434Z",
+  "target_time": "2026-11-08T21:51:27.932434Z",
+  "probability_up": 0.29,
+  "explanation": "Mocked probability for the fake-headline experiment.",
+  "evidence_ids": [
+    "experiment-article-021"
+  ],
+  "data_status": "sufficient_data",
+  "limitations": []
+}

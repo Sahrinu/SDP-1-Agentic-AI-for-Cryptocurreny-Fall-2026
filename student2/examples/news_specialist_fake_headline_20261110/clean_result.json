@@ -1,0 +1,12 @@
+{
+  "agent": "News Specialist",
+  "prediction_time": "2026-11-07T21:51:27.932434Z",
+  "target_time": "2026-11-08T21:51:27.932434Z",
+  "probability_up": 0.43,
+  "explanation": "Mocked probability for the fake-headline experiment.",
+  "evidence_ids": [
+    "https://finance.yahoo.com/markets/crypto/articles/bitcoin-rebounds-76-000-1-084235948.html"
+  ],
+  "data_status": "sufficient_data",
+  "limitations": []
+}

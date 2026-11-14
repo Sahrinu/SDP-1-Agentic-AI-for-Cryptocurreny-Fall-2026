@@ -9,6 +9,9 @@
 import argparse
 import importlib.util
 import math
+import json
+from collections.abc import Mapping
+from dataclasses import dataclass
 import sys
 from pathlib import Path
 
@@ -88,33 +91,115 @@ def load_fake_headlines():
 
 # ---------- one agent, one day ----------
 
+@dataclass(frozen=True)
+class AgentAnswer:
+    probability: float | None
+    reason: str | None = None
+
+
 def ask_agent(name, module, day, view):
-    """Run one agent safely. Bad or missing answers become a neutral 0.5."""
+    """Missing/invalid results abstain; a genuine 0.5 remains a forecast."""
     try:
         out = module.forecast(day.strftime("%Y-%m-%d"), view)
-        p = float(out.get("p_up", 0.5))
-        if out.get("data_missing") or math.isnan(p):
-            p = 0.5
-    except Exception as e:
-        print(f"  {name} failed on {day.date()}: {e}")
-        p = 0.5
-    return min(0.95, max(0.05, p))
+        if not isinstance(out, Mapping):
+            return AgentAnswer(None, "Agent response is not a mapping")
+        if out.get("data_missing") or out.get("data_status") == "insufficient_data":
+            return AgentAnswer(None, str(out.get("limitations") or out.get("evidence") or "Insufficient data"))
+        value = out.get("p_up")
+        if value is None or isinstance(value, bool):
+            return AgentAnswer(None, "Missing or invalid p_up")
+        p = float(value)
+        if not math.isfinite(p) or not 0 <= p <= 1:
+            return AgentAnswer(None, "p_up must be finite and between 0 and 1")
+    except Exception as exc:
+        # Do not expose exception text that could contain credentials.
+        return AgentAnswer(None, "Agent failed: " + type(exc).__name__)
+    # Preserve the original runner's clipping policy for valid forecasts.
+    return AgentAnswer(min(0.95, max(0.05, p)))
 
 
 def combine(ex, forecasts):
-    return {
-        "exchange": ex.team_forecast(forecasts),
-        "vote": vote(forecasts),
-        "average": average(forecasts),
-    }
+    if not forecasts:
+        return dict.fromkeys(METHODS, None)
+    return {"exchange": ex.team_forecast(forecasts),
+            "vote": vote(forecasts), "average": average(forecasts)}
+
+
+def rounded(value, digits=4):
+    return None if value is None else round(value, digits)
+
+
+def _aware(value):
+    parsed = pd.Timestamp(value)
+    if pd.isna(parsed) or parsed.tzinfo is None:
+        raise ValueError("Expected a timezone-aware timestamp")
+    return parsed.tz_convert("UTC")
+
+
+def student2_window_error(day, tomorrow, snapshot, settlement):
+    """Compare to caller-attested CSV close metadata; never guess a provider/time."""
+    try:
+        if not isinstance(snapshot, Mapping) or not isinstance(settlement, Mapping):
+            return "Missing Student 2 snapshot or explicit CSV settlement metadata"
+        c = snapshot["student2_forecast"]
+        prediction, target = _aware(c["prediction_time"]), _aware(c["target_time"])
+        if prediction.date() != day.date() or target.date() != tomorrow.date():
+            return "Student 2 window does not match the next available CSV close dates"
+        if target - prediction != pd.Timedelta(hours=24):
+            return "Student 2 requires exactly 24 hours, not merely the next CSV row"
+        if prediction != _aware(settlement["close_times"][str(day.date())]) or target != _aware(settlement["close_times"][str(tomorrow.date())]):
+            return "Student 2 timestamps differ from the declared CSV close timestamps"
+        for key in ("price_source", "reference_price_definition"):
+            if not isinstance(c[key], str) or not c[key].strip() or c[key] != settlement[key]:
+                return "Student 2 and CSV settlement disagree on " + key
+        if c["tie_definition"] != "down" or settlement["tie_definition"] != "down":
+            return "CSV settlement is strictly higher; ties must be down"
+    except (KeyError, ValueError, TypeError, OverflowError):
+        return "Missing or invalid explicit CSV settlement/forecast metadata"
+    return None
+
+
+def _ask_registered_agent(name, module, student2_names, day, view, window_error):
+    is_student2_betting = name in student2_names and (
+        name == "Betting Odds Specialist" or getattr(module, "kind", None) == "betting_odds"
+    )
+    if is_student2_betting:
+        # Only the evidence-validating Student 2 adapter may forecast; legacy
+        # odds adapters could return a market payout price as the prediction.
+        from student2.integration_adapter import Student2Adapter
+        if type(module) is not Student2Adapter or module.kind != "betting_odds":
+            reason = "Betting Odds unavailable: no compatible verified live evidence"
+            if window_error:
+                reason += "; " + window_error
+            return AgentAnswer(None, reason)
+    if name in student2_names and window_error:
+        return AgentAnswer(None, window_error)
+    return ask_agent(name, module, day, view)
+
+
+def evaluate_agents(agents, student2_names, day, view, window_error):
+    forecasts, abstentions = {}, {}
+    for name, module in agents.items():
+        answer = _ask_registered_agent(name, module, student2_names, day, view, window_error)
+        if answer.probability is None:
+            abstentions[name] = answer.reason
+        else:
+            forecasts[name] = answer.probability
+    return forecasts, abstentions
 
 
 # ---------- main loop ----------
 
-def run(start, end, attack_days, data_dir, agents_dir, out_dir):
+def run(start, end, attack_days, data_dir, agents_dir, out_dir, *,
+        student2_adapters=None, student2_inputs=None, settlement_contract=None):
     print("Loading data and agents...")
     data = load_data(data_dir)
     agents = load_agents(agents_dir)
+    student2_adapters = dict(student2_adapters or {})
+    if set(agents) & set(student2_adapters):
+        raise ValueError("Duplicate agent names in Student 2 registration")
+    agents.update(student2_adapters)
+    student2_names = set(student2_adapters)
     if "btc_prices" not in data:
         sys.exit("Need data/btc_prices.csv (with date and close columns) to settle the bets.")
     if not agents:
@@ -125,6 +210,11 @@ def run(start, end, attack_days, data_dir, agents_dir, out_dir):
     print(f"  agents that read news (attacked): {', '.join(news_agents) or 'none'}")
 
     close = data["btc_prices"]["close"]
+    if close.index.has_duplicates:
+        raise ValueError("BTC close dates must be unique")
+    close = pd.to_numeric(close, errors="raise")
+    if not all(math.isfinite(float(v)) and float(v) > 0 for v in close):
+        raise ValueError("BTC close prices must be finite and positive")
     days = [d for d in close.index if pd.Timestamp(start) <= d <= pd.Timestamp(end)]
     days = [d for d in days if d < close.index[-1]]  # need tomorrow's price to settle
     if not days:
@@ -138,16 +228,23 @@ def run(start, end, attack_days, data_dir, agents_dir, out_dir):
     rows, coin_rows, attack_rows = [], [], []
 
     for day in days:
-        view = data_upto(data, day)
-        forecasts = {name: ask_agent(name, m, day, view) for name, m in agents.items()}
-        team = combine(ex, forecasts)
-        weights = ex.weights(forecasts.keys())
-
         tomorrow = close.index[close.index.get_loc(day) + 1]
+        view = data_upto(data, day)
+        snapshot = (student2_inputs or {}).get(str(day.date()), {})
+        if isinstance(snapshot, Mapping):
+            # Only specialist fields may be overlaid; never replace price tables.
+            view.update({k: v for k, v in snapshot.items() if k.startswith("student2_")})
+        error = student2_window_error(day, tomorrow, snapshot, settlement_contract)
+        forecasts, abstentions = evaluate_agents(agents, student2_names, day, view, error)
+        team = combine(ex, forecasts)
+        weights = ex.weights(forecasts.keys()) if forecasts else {}
         went_up = bool(close[tomorrow] > close[day])
-
-        row = {"date": day.date(), **{f"p_{a}": round(p, 3) for a, p in forecasts.items()}}
-        row.update({m: round(v, 4) for m, v in team.items()})
+        row = {"date": day.date(),
+               **{f"p_{a}": rounded(forecasts.get(a), 3) for a in agents},
+               "active_agents": json.dumps(sorted(forecasts)),
+               "abstentions": json.dumps(abstentions),
+               "available_agents": len(forecasts)}
+        row.update({m: rounded(v) for m, v in team.items()})
         row["went_up"] = int(went_up)
         rows.append(row)
 
@@ -156,38 +253,58 @@ def run(start, end, attack_days, data_dir, agents_dir, out_dir):
             attacked_view = dict(view)
             attacked_view["fake_headline"] = headline
             attacked = dict(forecasts)
+            attack_abstentions = dict(abstentions)
             for name in news_agents:
-                attacked[name] = ask_agent(name, agents[name], day, attacked_view)
+                answer = _ask_registered_agent(name, agents[name], student2_names,
+                                               day, attacked_view, error)
+                attacked.pop(name, None)
+                attack_abstentions.pop(name, None)
+                if answer.probability is None:
+                    attack_abstentions[name] = answer.reason
+                else:
+                    attacked[name] = answer.probability
             team_attacked = combine(ex, attacked)
+            comparable = (bool(news_agents) and set(forecasts) == set(attacked)
+                          and all(name in forecasts and name in attacked for name in news_agents))
             for m in METHODS:
                 attack_rows.append({
                     "date": day.date(), "method": m, "headline": headline,
-                    "clean": round(team[m], 4), "attacked": round(team_attacked[m], 4),
-                    "shift": round(abs(team_attacked[m] - team[m]), 4),
+                    "clean": rounded(team[m]), "attacked": rounded(team_attacked[m]),
+                    "shift": rounded(abs(team_attacked[m] - team[m])) if comparable else None,
+                    "comparable": comparable,
+                    "comparison_reason": "" if comparable else "Targeted news agent unavailable or participating agents changed",
+                    "clean_active_agents": json.dumps(sorted(forecasts)),
+                    "attacked_active_agents": json.dumps(sorted(attacked)),
+                    "attacked_abstentions": json.dumps(attack_abstentions),
                 })
 
         # settle AFTER the forecast, so the forecast never sees the answer
         ex.settle(forecasts, went_up)
         coin_rows.append({"date": day.date(),
                           **{f"coins_{a}": round(c, 2) for a, c in ex.coins.items()},
-                          **{f"weight_{a}": round(w, 3) for a, w in weights.items()}})
+                          **{f"weight_{a}": round(weights.get(a, 0.0), 3) for a in agents},
+                          "cap_feasible": bool(forecasts) and len(forecasts) * ex.cap >= 1})
 
     results = pd.DataFrame(rows)
     coins = pd.DataFrame(coin_rows)
-    attacks = pd.DataFrame(attack_rows)
+    attacks = pd.DataFrame(attack_rows, columns=["date", "method", "headline", "clean", "attacked", "shift", "comparable", "comparison_reason", "clean_active_agents", "attacked_active_agents", "attacked_abstentions"])
 
     # ---------- summary ----------
     summary = []
     for m in METHODS:
-        p, y = results[m], results["went_up"]
+        valid = results[m].notna()
+        p, y = results.loc[valid, m].astype(float), results.loc[valid, "went_up"]
         line = {
             "method": m,
+            "evaluated_days": int(valid.sum()),
+            "missing_days": int((~valid).sum()),
             "brier": round(((p - y) ** 2).mean(), 4),          # lower is better
             "direction_right": round(((p > 0.5) == (y == 1)).mean(), 3),
         }
         if len(attacks):
             a = attacks[attacks["method"] == m]["shift"]
             line["mean_attack_shift"] = round(a.mean(), 4)  # lower = harder to fool
+            line["comparable_attack_days"] = int(a.notna().sum())
             line["max_attack_shift"] = round(a.max(), 4)
         summary.append(line)
     summary = pd.DataFrame(summary)
@@ -218,5 +335,14 @@ if __name__ == "__main__":
     parser.add_argument("--data-dir", default=str(ROOT / "data"))
     parser.add_argument("--agents-dir", default=str(ROOT / "agents"))
     parser.add_argument("--out", default=str(ROOT / "experiments" / "results"))
+    parser.add_argument("--student2-inputs", help="JSON with days and settlement metadata; registers offline Student 2 adapters")
     args = parser.parse_args()
-    run(args.start, args.end, args.attack_days, args.data_dir, args.agents_dir, args.out)
+    extras = {}
+    if args.student2_inputs:
+        from student2.integration_adapter import Student2Adapter
+        bundle = json.loads(Path(args.student2_inputs).read_text(encoding="utf-8-sig"))
+        adapters = [Student2Adapter(kind) for kind in ("news", "mood", "betting_odds")]
+        extras = dict(student2_adapters={a.AGENT_NAME: a for a in adapters},
+                      student2_inputs=bundle["days"], settlement_contract=bundle["settlement"])
+
+    run(args.start, args.end, args.attack_days, args.data_dir, args.agents_dir, args.out, **extras)

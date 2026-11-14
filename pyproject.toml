@@ -9,14 +9,43 @@ description = "Stablecoin data, a rule-based agent, and BTC/USD paper trading"
 requires-python = ">=3.10"
 dependencies = []
 
+[project.optional-dependencies]
+# Student 4 remains usable without extras on Python 3.10. Student 2 requires
+# Python 3.11 or newer because its existing code uses StrEnum and datetime.UTC.
+student2 = [
+    "pydantic>=2.14,<3",
+    "google-genai>=3,<4",
+    "langchain-core>=1.7,<2",
+    "python-dotenv>=1.1,<2",
+    "yfinance>=1.8,<2",
+    "tzdata>=2025.2",
+]
+student2-test = ["pytest>=9,<10"]
+student2-live = ["python-socketio[client]>=5,<6"]
+student2-google = ["langchain-google-genai>=4.4,<5"]
+student2-anthropic = ["langchain-anthropic"]
+student2-openai = ["langchain-openai"]
+student2-aws = ["langchain-aws"]
+
 [tool.setuptools]
 license-files = ["licenses/pharos-MIT.txt"]
 
 [tool.setuptools.packages.find]
-include = ["student4*"]
+include = ["student4*", "student2*"]
+namespaces = true
 
 [tool.setuptools.package-data]
 student4 = ["fixtures/*.json"]
+student2 = [
+    "README.md",
+    "BETTING_ODDS_DATA.md",
+    "BETTING_ODDS_LIVE.md",
+    "INTEGRATION.md",
+    "MARKET_EVIDENCE.md",
+    "requirements-betting-live.txt",
+    "examples/limitless_discovery/*.json",
+    "verification/*.ps1",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -1,0 +1,162 @@
+﻿{
+    "id":  463042,
+    "automationType":  "lumy",
+    "conditionId":  "0x617d0d7dffd108d6179587cf966c616917c163c4ad7275b1d816864185227659",
+    "negRiskRequestId":  null,
+    "description":  "\u003cp\u003eThis market will resolve to \u0026quot;Up\u0026quot; if the \u0026quot;Close\u0026quot; price for the Binance 1 minute candle for BTC/USDT Nov 13 \u0026#39;26 12:00 in the ET timezone (noon) is lower than the final \u0026quot;Close\u0026quot; price for the Nov 14 \u0026#39;26 12:00 ET candle.\u003c/p\u003e\u003cp\u003e\u003cbr\u003e\u003c/p\u003e\u003cp\u003eThis market will resolve to \u0026quot;Down\u0026quot; if the \u0026quot;Close\u0026quot; price for the Binance 1 minute candle for BTC/USDT Nov 13 \u0026#39;26 12:00 in the ET timezone (noon) is higher than the final \u0026quot;Close\u0026quot; price for the Nov 14 \u0026#39;26 12:00 ET candle.\u003c/p\u003e\u003cp\u003e\u003cbr\u003e\u003c/p\u003e\u003cp\u003eIf the final \u0026quot;Close\u0026quot; price for both of these candles is exactly equal on Binance, this market will resolve 50-50.\u003c/p\u003e\u003cp\u003e\u003cbr\u003e\u003c/p\u003e\u003cp\u003eThe resolution source for this market is Binance, specifically the BTC/USDT \u0026quot;Close\u0026quot; prices currently available at \u003ca href=\"https://www.binance.com/en/trade/BTC_USDT\" target=\"_blank\" rel=\"noopener noreferrer\"\u003ehttps://www.binance.com/en/trade/BTC_USDT\u003c/a\u003e with \u0026quot;1m\u0026quot; and \u0026quot;Candles\u0026quot; selected on the top bar.\u003c/p\u003e\u003cp\u003e\u003cbr\u003e\u003c/p\u003e\u003cp\u003ePlease note that this market is about the price according to Binance BTC/USDT, not according to other exchanges or trading pairs.\u003c/p\u003e",
+    "groupId":  null,
+    "collateralToken":  {
+                            "address":  "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+                            "decimals":  6,
+                            "symbol":  "USDC"
+                        },
+    "title":  "BTC Up or Down Daily",
+    "proxyTitle":  null,
+    "expirationDate":  "Nov 14, 2026",
+    "expirationTimestamp":  1794675600000,
+    "createdAt":  "2026-11-13T17:01:01.239Z",
+    "startAt":  "2026-11-13T17:00:00.000Z",
+    "updatedAt":  "2026-11-13T17:06:11.875Z",
+    "categories":  [
+                       "Crypto",
+                       "Daily"
+                   ],
+    "status":  "FUNDED",
+    "expired":  false,
+    "hidden":  false,
+    "creator":  {
+                    "name":  "Limitless",
+                    "username":  "Limitless",
+                    "imageURI":  "https://limitless.exchange/assets/images/logo.svg",
+                    "link":  "https://x.com/trylimitless",
+                    "address":  "0x60e61631d9a585797cDee9f79FafDecf3bd7F64D"
+                },
+    "tags":  [
+                 "Lumy",
+                 "Pareto"
+             ],
+    "volume":  "0",
+    "volumeFormatted":  "0.000000",
+    "tokens":  {
+                   "yes":  "36592756685895761897890556811596610744383919892054143673356985511231306785692",
+                   "no":  "11516098394565884201360470051334113054015135210565874472175174988577627034213"
+               },
+    "prices":  [
+                   0.04,
+                   0.96
+               ],
+    "tradePrices":  {
+                        "buy":  {
+                                    "market":  [
+                                                   0.054,
+                                                   0.974
+                                               ],
+                                    "limit":  [
+                                                  0.026,
+                                                  0.946
+                                              ]
+                                },
+                        "sell":  {
+                                     "market":  [
+                                                    0.026,
+                                                    0.946
+                                                ],
+                                     "limit":  [
+                                                   0.054,
+                                                   0.974
+                                               ]
+                                 }
+                    },
+    "isOther":  false,
+    "isRewardable":  true,
+    "slug":  "btc-up-or-down-daily-p-1794578727633",
+    "stableSlug":  "btc-daily-price",
+    "tradeType":  "clob",
+    "venue":  {
+                  "exchange":  "0x05c748E2f4DcDe0ec9Fa8DDc40DE6b867f923fa5",
+                  "adapter":  null,
+                  "feeModule":  "0x7B6ffe5bA8B5ec7afB0AaBaE629D12dA5bC62565",
+                  "feeModuleType":  "COLLATERAL"
+              },
+    "marketType":  "single",
+    "priorityIndex":  0,
+    "properties":  [
+                       {
+                           "propertyKeySlug":  "domain",
+                           "value":  [
+                                         "crypto"
+                                     ]
+                       },
+                       {
+                           "propertyKeySlug":  "duration",
+                           "value":  [
+                                         "daily"
+                                     ]
+                       },
+                       {
+                           "propertyKeySlug":  "ticker",
+                           "value":  [
+                                         "btc"
+                                     ]
+                       }
+                   ],
+    "winningOutcomeIndex":  null,
+    "metadata":  {
+                     "fee":  true,
+                     "chart":  {
+                                   "candle":  "daily",
+                                   "market":  "spot",
+                                   "source":  "binance",
+                                   "symbol":  "BTCUSDT",
+                                   "windowOpenAt":  "2026-11-13T17:00:00.000Z"
+                               },
+                     "openPrice":  "68621.8",
+                     "isBannered":  false,
+                     "externalSlug":  "bitcoin-up-or-down-on-november-14-2026",
+                     "isPolyArbitrage":  true,
+                     "externalProvider":  "polymarket",
+                     "externalRulesWatch":  {
+                                                "rulesHash":  "66a0f73c73d1a7041965e05dc271e9131b8cde4c5c2d3711a3ad54db2c645d28",
+                                                "clarificationIds":  [
+
+                                                                     ]
+                                            },
+                     "polymarketSeriesId":  41,
+                     "openPriceCapturedAt":  "2026-11-13T17:00:00.000Z",
+                     "orderbookSources":  {
+                                              "predict":  {
+                                                              "status":  "matched",
+                                                              "stats":  {
+                                                                            "volumeTotalUsd":  109526.97,
+                                                                            "volume24hUsd":  109301.92
+                                                                        }
+                                                          }
+                                          }
+                 },
+    "settings":  {
+                     "minSize":  "100000000",
+                     "maxSpread":  0.035,
+                     "dailyReward":  "0",
+                     "effectiveDailyReward":  "0",
+                     "currentRewardsMultiplier":  1,
+                     "rewardsEpoch":  "0",
+                     "c":  "3",
+                     "rebateRate":  "1",
+                     "takerDelayMs":  250,
+                     "creatorFeePct":  0
+                 },
+    "imageUrl":  "https://cdn.limitless.exchange/price-oracles/57/1546e81a-9e31-4292-b36c-b54e9443e4b1.svg",
+    "logo":  "https://cdn.limitless.exchange/price-oracles/57/1546e81a-9e31-4292-b36c-b54e9443e4b1.svg",
+    "priceOracleMetadata":  {
+                                "ticker":  "BTCUSDT",
+                                "assetType":  "CRYPTO",
+                                "pythAddress":  null,
+                                "chartSource":  "binance",
+                                "chainlinkFeedId":  null,
+                                "chainlinkFeedAddress":  null,
+                                "chainlinkPair":  null,
+                                "chainlinkStreamUrl":  null,
+                                "symbol":  "BTC",
+                                "name":  "BTC"
+                            }
+}

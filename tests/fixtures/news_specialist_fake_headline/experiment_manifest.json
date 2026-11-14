@@ -1,7 +1,8 @@
 {
   "experiment_id": "news_specialist_fake_headline_20261110",
-  "baseline_source": "tradingagents/agents/news_specialist_live_result.json",
-  "article_source": "tradingagents/agents/news_specialist_accepted_evidence.json",
+  "baseline_source": "tests/fixtures/news_specialist_fake_headline/original_news_specialist_live_result.json",
+  "baseline_source_note": "Historical source file labelled live in the original project; provider and execution provenance were not independently verified.",
+  "article_source": "tests/fixtures/news_specialist_fake_headline/news_specialist_accepted_evidence.json",
   "prediction_time": "2026-11-07T21:51:27.932434Z",
   "target_time": "2026-11-08T21:51:27.932434Z",
   "injected_article": {
