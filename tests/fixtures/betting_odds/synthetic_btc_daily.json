@@ -1,0 +1,20 @@
+{
+  "synthetic": true,
+  "id": "synthetic-btc-daily",
+  "title": "Synthetic BTC Up or Down Daily",
+  "slug": "synthetic-btc-daily",
+  "description": "This market will resolve to \"Up\" if the \"Close\" price for the Binance 1 minute candle for BTC/USDT Nov 13 '26 12:00 in the ET timezone (noon) is lower than the final \"Close\" price for the Nov 14 '26 12:00 ET candle. This market will resolve to \"Down\" if the \"Close\" price for the Binance 1 minute candle for BTC/USDT Nov 13 '26 12:00 in the ET timezone (noon) is higher than the final \"Close\" price for the Nov 14 '26 12:00 ET candle. If the final \"Close\" price for both of these candles is exactly equal on Binance, this market will resolve to \"Down\". The resolution source for this market is Binance, specifically the BTC/USDT \"Close\" prices with 1m and Candles selected.",
+  "startAt": "2026-11-13T17:00:00Z",
+  "expirationTimestamp": 1794675600000,
+  "quoteTimestamp": "2026-11-13T16:59:40Z",
+  "status": "FUNDED",
+  "expired": false,
+  "tradeType": "clob",
+  "marketType": "single",
+  "automationType": "lumy",
+  "tokens": {"yes": "synthetic-yes", "no": "synthetic-no"},
+  "prices": [0.63, 0.37],
+  "liquidity": "500000000",
+  "liquidityFormatted": "500.000000",
+  "volumeFormatted": "1000000.000000"
+}
