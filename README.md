@@ -1,4 +1,14 @@
+# Student 5 contribution
+
+World economy forecasting, daily Yahoo macro inputs with bounded weekend forward
+fill, and the 25% BTC exposure gateway are documented in
+[Student 5 implementation](docs/student5.md). The
+[project Gantt template](docs/gantt.md) covers 14 September–24 November 2026.
+Run `python examples/student5_demo.py` for the offline synthetic demonstration.
+The final team trading pipeline must call the risk gateway before execution.
+
 # Student 2 — News and Mood Specialists
+
 This repo contains the contribution package for the Bitcoin News Specialist and Mood Specialist, prepared in a self-contained form without depending on the original TradingAgents project.
 
 ## Included
