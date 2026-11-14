@@ -175,11 +175,3 @@ These files are prepared locally against main commit
 `c86071215c3803647b9977f9979ad974c9ae8954`; no commit/push is part of preparation.
 Record your own commit URL, review date and test results once approved. The
 Contrarian agent, circuit breaker and full security study remain separate work.
-
-AI assistance used for this change: the student requested a template-compatible
-World economy agent, a cost-aware 25% risk gateway, a macro-source choice with
-weekend forward fill and lag consideration, and a September 14–November 24 Gantt
-template. Codex generated the implementation, explanatory documentation and
-tests, and checked provider timing documentation. This is a task summary, not
-an invented historical prompt log. Review the code and assumptions before
-claiming or presenting the contribution.
