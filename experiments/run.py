@@ -164,10 +164,14 @@ def _ask_registered_agent(name, module, student2_names, day, view, window_error)
         name == "Betting Odds Specialist" or getattr(module, "kind", None) == "betting_odds"
     )
     if is_student2_betting:
-        reason = "Betting Odds unavailable: no compatible verified live evidence"
-        if window_error:
-            reason += "; " + window_error
-        return AgentAnswer(None, reason)
+        # Only the evidence-validating Student 2 adapter may forecast; legacy
+        # odds adapters could return a market payout price as the prediction.
+        from student2.integration_adapter import Student2Adapter
+        if type(module) is not Student2Adapter or module.kind != "betting_odds":
+            reason = "Betting Odds unavailable: no compatible verified live evidence"
+            if window_error:
+                reason += "; " + window_error
+            return AgentAnswer(None, reason)
     if name in student2_names and window_error:
         return AgentAnswer(None, window_error)
     return ask_agent(name, module, day, view)

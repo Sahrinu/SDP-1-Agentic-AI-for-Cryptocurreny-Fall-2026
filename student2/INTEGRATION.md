@@ -36,11 +36,11 @@ Thus this CLI alone will NOT generate News/Mood forecasts: missing clients cause
 abstention. It is not a live demo. Supply clients explicitly using the Python
 interface when model calls are authorized and target definitions are agreed.
 
-The runner makes registered Student 2 Betting Odds adapters abstain until a
-compatible verified live-data path exists. This guard applies to both normal and
-attacked forecasts, even when a caller supplies a synthetic or historical snapshot.
-The specialist remains implemented and tested offline; it is not operational for
-live forecasting.
+The Student 2 runner guard permits the repaired `Student2Adapter("betting_odds")`
+through the existing settlement-window check. Other or legacy Betting Odds
+adapters remain blocked because they may return a contract price directly.
+Missing evidence, a model callable or matching settlement metadata still causes
+an abstention. No independent claim of live forecast accuracy is made.
 
 A plain runner fake headline remains unsupported by the News adapter. If it
 causes an abstention, the attack comparison is marked non-comparable, with no
@@ -68,16 +68,20 @@ the source or reference-price convention. Supply the following explicitly in
 Supply timestamped records and a timezone-aware snapshot observation time at
 or before prediction using `student2_news_articles` and
 `student2_news_observed_at`, `student2_mood_readings` and
-`student2_mood_observed_at`, or `student2_markets` and
+`student2_mood_observed_at`, or `student2_market_observation` and
 `student2_markets_observed_at`. A publication or reading time alone does not
 prove when its contents were obtained or whether they were revised; the
 caller is responsible for the snapshot's provenance. Naive evidence
 timestamps are rejected instead of silently assigned UTC.
 
 News and Mood require an explicitly injected model client; no model client is
-created automatically. Betting Odds uses only supplied snapshots, not an
-automatic network fetch. `student2_verified_quote_times` must come from a
-trusted source that binds each timestamp to the exact quoted price. A nonempty
+created automatically. For Betting Odds, provide an explicit callable
+`model_client(prompt)` and a saved validated `student2_market_observation`
+with its timestamped raw book and summary. Optionally supply
+`student2_price_context` for an explicit Binance BTC/USDT spot target; source,
+price and time checks still apply. The adapter does not fetch or create a model.
+Different valid contracts are evidence, with differences disclosed, not direct
+forecasts; invalid or stale evidence and unavailable model calls abstain. A nonempty
 team `fake_headline` is rejected for News until it is supplied as properly
 timestamped article evidence.
 
@@ -92,6 +96,6 @@ assert result["p_up"] is None and result["data_missing"] is True
 ```
 
 These are adapter requirements, not an assertion that the team has agreed to
-the missing market conventions. The saved Limitless market has incompatible
-timestamps and tie handling; no matching live market or reliable quote-level
-timestamp has been established. See [BETTING_ODDS_DATA.md](BETTING_ODDS_DATA.md).
+the missing market conventions. The saved Limitless daily market has different
+timestamps and tie handling; a provider-timestamped book is evidence, not a direct
+probability of the team event. See [MARKET_EVIDENCE.md](MARKET_EVIDENCE.md).

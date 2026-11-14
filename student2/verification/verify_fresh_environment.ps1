@@ -13,21 +13,37 @@ if (-not (Test-Path -LiteralPath $student2Verifier -PathType Leaf)) {
 $student2Temp = [System.IO.Path]::GetTempPath()
 $student2Venv = Join-Path $student2Temp ('student2-fresh-env-' + [guid]::NewGuid().ToString('N'))
 $student2TestTemp = Join-Path $student2Temp ('student2-tests-' + [guid]::NewGuid().ToString('N'))
+$student2BuildRoot = Join-Path $student2Temp ('student2-wheel-source-' + [guid]::NewGuid().ToString('N'))
+$student2Wheelhouse = Join-Path $student2Temp ('student2-wheelhouse-' + [guid]::NewGuid().ToString('N'))
 $student2OldPythonPath = [Environment]::GetEnvironmentVariable('PYTHONPATH', 'Process')
 $student2OldNoBytecode = [Environment]::GetEnvironmentVariable('PYTHONDONTWRITEBYTECODE', 'Process')
+$student2OldPipRetries = [Environment]::GetEnvironmentVariable('PIP_RETRIES', 'Process')
+$student2OldPipTimeout = [Environment]::GetEnvironmentVariable('PIP_TIMEOUT', 'Process')
 
 Push-Location -LiteralPath $student2Root
 try {
     $env:PYTHONPATH = ''
     $env:PYTHONDONTWRITEBYTECODE = '1'
+    $env:PIP_RETRIES = '0'
+    $env:PIP_TIMEOUT = '15'
     Write-Output "Fresh environment: $student2Venv"
 
     python -m venv $student2Venv
     if ($LASTEXITCODE -ne 0) { throw "Environment creation failed (exit $LASTEXITCODE)" }
 
     $student2Python = Join-Path $student2Venv 'Scripts/python.exe'
-    & $student2Python -m pip install '.[student2,student2-test]'
-    if ($LASTEXITCODE -ne 0) { throw "Package installation failed (exit $LASTEXITCODE)" }
+    # Build from an isolated copy so setuptools does not alter checkout build or egg-info files.
+    New-Item -ItemType Directory -Path $student2BuildRoot, $student2Wheelhouse | Out-Null
+    foreach ($item in @('pyproject.toml', 'student2', 'student4', 'licenses')) {
+        Copy-Item -LiteralPath (Join-Path $student2Root $item) -Destination $student2BuildRoot -Recurse
+    }
+    & $student2Python -m pip wheel --retries 0 --timeout 15 --no-deps --wheel-dir $student2Wheelhouse $student2BuildRoot
+    if ($LASTEXITCODE -ne 0) { throw "Wheel build failed (exit $LASTEXITCODE)" }
+    $student2Wheels = @(Get-ChildItem -LiteralPath $student2Wheelhouse -Filter '*.whl' -File)
+    if ($student2Wheels.Count -ne 1) { throw 'Expected exactly one built project wheel.' }
+    $student2WheelSpec = $student2Wheels[0].FullName + '[student2,student2-test,student2-live]'
+    & $student2Python -m pip install --retries 0 --timeout 15 $student2WheelSpec
+    if ($LASTEXITCODE -ne 0) { throw "Wheel installation failed (exit $LASTEXITCODE)" }
 
     & $student2Python -m pip check
     if ($LASTEXITCODE -ne 0) { throw "Dependency check failed (exit $LASTEXITCODE)" }
@@ -43,7 +59,16 @@ try {
         tests/test_student2_adapter.py `
         tests/test_runner_abstentions.py `
         tests/test_student2_import_provenance.py `
-        tests/test_student2_yahoo_compat.py
+        tests/test_student2_yahoo_compat.py `
+        tests/test_betting_evidence_forecast.py `
+        tests/test_binance_json_transport.py `
+        tests/test_binance_raw_transport.py `
+        tests/test_limitless_live_reader.py `
+        tests/test_limitless_powershell_collector.py `
+        tests/test_limitless_saved_listing.py `
+        tests/test_limitless_targeted_discovery.py `
+        tests/test_market_evidence_specialist.py `
+        tests/test_market_price_context.py
     if ($LASTEXITCODE -ne 0) { throw "Student 2 offline tests failed (exit $LASTEXITCODE)" }
 
     Write-Output "Fresh-environment verification passed: $student2Venv"
@@ -51,5 +76,7 @@ try {
 finally {
     [Environment]::SetEnvironmentVariable('PYTHONPATH', $student2OldPythonPath, 'Process')
     [Environment]::SetEnvironmentVariable('PYTHONDONTWRITEBYTECODE', $student2OldNoBytecode, 'Process')
+    [Environment]::SetEnvironmentVariable('PIP_RETRIES', $student2OldPipRetries, 'Process')
+    [Environment]::SetEnvironmentVariable('PIP_TIMEOUT', $student2OldPipTimeout, 'Process')
     Pop-Location
 }

@@ -160,9 +160,7 @@ def test_saved_limitless_market_stays_insufficient_with_no_fresh_quote():
     missing(Student2Adapter("betting_odds").forecast("2025-01-19", data))
 
 
-def test_synthetic_matching_betting_market_produces_exact_odds_offline(monkeypatch):
-    import student2.integration_adapter as adapter_module
-
+def test_matching_market_price_alone_does_not_become_forecast():
     path = Path(__file__).resolve().parents[1] / "tests/fixtures/betting_odds/synthetic_btc_daily.json"
     market = json.loads(path.read_text(encoding="utf-8"))
     assert market["synthetic"] is True
@@ -173,17 +171,11 @@ def test_synthetic_matching_betting_market_produces_exact_odds_offline(monkeypat
         "student2_markets_observed_at": "2026-11-13T16:59:45Z",
         "student2_verified_quote_times": {market["slug"]: market["quoteTimestamp"]},
     }
-    real_specialist = adapter_module.run_betting_odds_specialist
-
-    def offline_specialist(**kwargs):
-        return real_specialist(**kwargs, now="2026-11-13T16:59:45Z")
-
-    monkeypatch.setattr(adapter_module, "run_betting_odds_specialist", offline_specialist)
-    result = Student2Adapter("betting_odds").forecast("2026-11-13", data)
-    assert result["p_up"] == pytest.approx(0.63)
-    assert result["data_missing"] is False
-    assert result["data_status"] == "sufficient_data"
-    assert "synthetic" in " ".join(map(str, result["evidence"])).lower()
+    calls = []
+    result = Student2Adapter("betting_odds", model_client=lambda p: calls.append(p)).forecast("2026-11-13", data)
+    missing(result)
+    assert calls == []  # A listing price is not a validated book or a forecast.
+    assert "observation" in " ".join(result["evidence"]).lower()
 
 
 @pytest.mark.parametrize("kind", ["news", "mood", "betting_odds"])

@@ -1,3 +1,18 @@
+# Current status after the live-reader patch
+
+A public Socket.IO book reader is now implemented separately in
+`student2.agents.limitless_live`. See [BETTING_ODDS_LIVE.md](BETTING_ODDS_LIVE.md)
+for installation, tests and the live observation command. It has offline tests;
+a successful live run has NOT been verified by the patch author.
+
+The strict REST quote-inspection path below retains its freshness policy. The
+reader binds its midpoint to the same streamed event timestamp; it never assigns
+that timestamp to a separate REST quote. The repaired Betting Odds adapter uses
+validated market evidence for an experimental model estimate, disclosing rule
+differences instead of copying a contract price into the forecast.
+
+## Original REST investigation (historical context)
+
 # Betting Odds: Limitless live-data blocker
 
 The specialist cannot currently verify that a live Limitless REST quote is fresh.
@@ -27,15 +42,19 @@ substituted for the quote's own verified time.
   market-price response. The docs do not establish the maximum age of the
   initial snapshot, and versions can restart after failover. A future stream
   adapter would need to establish timestamp meaning, book identity, ordering,
-  and freshness before using its price or depth; no such adapter is implemented.
+  and freshness before using its price or depth; at the time of this investigation no such reader was implemented; see the current-status note above.
 
 ## Implications for the specialist
 
-`run_betting_odds_specialist` retains its strict event, tie, mapping, timing,
+`run_betting_odds_specialist` is a legacy exact-contract quote inspector, not
+the team forecasting adapter. It retains its strict event, tie, mapping, timing,
 and quote-freshness checks. `verified_quote_times` is an explicit input for a
 trusted adapter; the caller must establish that each time corresponds to the
 same market and price observation, not merely copy a response or retrieval
 timestamp. The current offline tests use this input with synthetic data only.
+For compatibility its schema uses the field name `probability_up` for the
+inspected payout price; that field is not an evidence-based forecast. The team
+adapter does not consume it as a prediction.
 
 The saved [market 463042 response](examples/limitless_discovery/market-463042-response.json)
 is historical discovery evidence with an unknown retrieval time. Its 50–50 tie
@@ -68,9 +87,10 @@ The current matcher recognizes only Binance BTC/USDT one-minute candle closes
 and the strict-higher rule where an exact tie is down. Unsupported or
 unverified definitions return `insufficient_data`; these supported values are
 not a declaration that the team has agreed to them. No live market has been
-verified to match the team's contract. The runner makes every registered
-Student 2 Betting Odds adapter abstain until compatible verified live evidence
-is available; supplied synthetic or historical snapshots cannot bypass this guard.
+verified to match the team's contract. The runner permits the repaired Student 2
+evidence adapter only with valid explicit settlement metadata; legacy Betting Odds
+adapters remain blocked from supplying raw prices as forecasts. Historical inputs
+must be demonstrably available by their prediction times.
 
 ## Dependencies and offline commands
 

@@ -60,6 +60,10 @@ class _NoRedirect(urllib.request.HTTPRedirectHandler):
         return None
 
 
+class _MarketResponseValidationError(ValueError):
+    """A locally generated, safe market-response validation failure."""
+
+
 def _fetch_page(page: int, limit: int, timeout: float) -> dict[str, Any]:
     """Fetch one public page, without credentials, proxies, redirects or retries."""
     url = f"{API_URL}?page={page}&limit={limit}"
@@ -67,7 +71,7 @@ def _fetch_page(page: int, limit: int, timeout: float) -> dict[str, Any]:
     with opener.open(url, timeout=timeout) as response:
         payload = json.load(response)
     if not isinstance(payload, dict):
-        raise ValueError("market response must be an object")
+        raise _MarketResponseValidationError("market response must be an object")
     return payload
 
 
@@ -79,29 +83,29 @@ def _fetch_markets(fetch_page: Callable[[int, int, float], dict[str, Any]],
     for page in range(1, max_pages + 1):
         payload = fetch_page(page, 25, timeout)
         if not isinstance(payload, dict) or not isinstance(payload.get("data"), list):
-            raise ValueError("market response lacks a data array")
+            raise _MarketResponseValidationError("market response lacks a data array")
         items = payload["data"]
         if not all(isinstance(item, dict) for item in items):
-            raise ValueError("market response contains a non-object market")
+            raise _MarketResponseValidationError("market response contains a non-object market")
         total = payload.get("totalMarketsCount")
         if isinstance(total, bool) or not isinstance(total, int) or total < 0:
-            raise ValueError("market response lacks a valid totalMarketsCount")
+            raise _MarketResponseValidationError("market response lacks a valid totalMarketsCount")
         if expected_total is not None and total != expected_total:
-            raise ValueError("market pagination total changed between pages")
+            raise _MarketResponseValidationError("market pagination total changed between pages")
         expected_total = total
         for item in items:
             identity = item.get("id") or item.get("slug")
             if identity is None or str(identity) in seen:
-                raise ValueError("market pagination contains a missing or duplicate market ID")
+                raise _MarketResponseValidationError("market pagination contains a missing or duplicate market ID")
             seen.add(str(identity))
         result.extend(items)
         if len(result) > total:
-            raise ValueError("market pagination returned more than totalMarketsCount")
+            raise _MarketResponseValidationError("market pagination returned more than totalMarketsCount")
         if len(result) == total:
             return result
         if not items:
-            raise ValueError("market pagination ended before totalMarketsCount")
-    raise ValueError(f"market pagination exceeded the {max_pages}-page limit")
+            raise _MarketResponseValidationError("market pagination ended before totalMarketsCount")
+    raise _MarketResponseValidationError(f"market pagination exceeded the {max_pages}-page limit")
 
 
 def _rules(market: dict[str, Any]) -> tuple[datetime, datetime, str]:
@@ -221,6 +225,8 @@ def _assess(market: dict[str, Any], prediction: datetime, target: datetime,
     liquidity, liquidity_note = _liquidity(market)
     if liquidity == 0:
         reasons.append("reported liquidity is zero")
+    elif market.get("liquidityFormatted") is not None and liquidity is None:
+        reasons.append("reported liquidity is invalid")
     quote_note = (f"Independently verified quote time: {quote_time.isoformat()}." if quote_time is not None
                   else "No independently verified quote timestamp is available.")
     return reasons, prob, [quote_note, liquidity_note, "Market prices are market-implied estimates, not guaranteed probabilities."]
@@ -237,8 +243,11 @@ def run_betting_odds_specialist(*, prediction_time: datetime | str,
                                 clock: Callable[[], datetime] | None = None,
                                 max_quote_age_seconds: float = 300,
                                 timeout_seconds: float = 15, max_pages: int = 20) -> NewsSpecialistResult:
-    """Return a quote only for a strictly matching event with a fresh quote.
+    """Legacy exact-contract quote inspection, not a Betting Odds forecast.
 
+    When present, the schema's ``probability_up`` field holds the market's
+    payout price; it is not an evidence-based model forecast. The team adapter
+    does not use this field as its forecast.
     ``observed_at`` is optional snapshot provenance, not a substitute for a
     quote timestamp. ``verified_quote_times`` is supplied by a trusted adapter
     and keyed by market slug; no documented provider timestamp is assumed.
@@ -249,6 +258,8 @@ def run_betting_odds_specialist(*, prediction_time: datetime | str,
     get_time = clock or (lambda: _datetime(now) if now is not None else datetime.now(timezone.utc))
     current = _datetime(get_time())
     contract_errors = []
+    if verified_quote_times is not None and not isinstance(verified_quote_times, dict):
+        contract_errors.append("verified_quote_times must be a mapping keyed by market slug")
     if target - prediction != timedelta(hours=24):
         contract_errors.append("forecast interval must be exactly 24 hours")
     if price_source != SUPPORTED_SOURCE:
@@ -257,7 +268,8 @@ def run_betting_odds_specialist(*, prediction_time: datetime | str,
         contract_errors.append(f"unsupported reference-price definition {reference_price_definition!r}")
     if tie_definition != SUPPORTED_TIE:
         contract_errors.append(f"unsupported tie definition {tie_definition!r}; strict-higher requires down")
-    if not math.isfinite(max_quote_age_seconds) or max_quote_age_seconds <= 0:
+    if (isinstance(max_quote_age_seconds, bool) or not isinstance(max_quote_age_seconds, (int, float))
+            or not math.isfinite(max_quote_age_seconds) or max_quote_age_seconds <= 0):
         contract_errors.append("maximum quote age must be positive and finite")
     observation = None
     if observed_at is not None:
@@ -267,21 +279,24 @@ def run_betting_odds_specialist(*, prediction_time: datetime | str,
                 contract_errors.append("observation timestamp is in the future")
             if observation > prediction:
                 contract_errors.append("observation timestamp is after prediction_time")
-        except ValueError:
+        except (ValueError, OverflowError, OSError):
             contract_errors.append("observation timestamp is invalid")
     if contract_errors:
         return _result(prediction, target, contract_errors)
     if markets is None:
         if fetch_page is None and (now is not None or clock is not None):
             return _result(prediction, target, ["test clock overrides are not allowed for real API requests"])
-        if not 0 < timeout_seconds <= 15 or not isinstance(max_pages, int) or isinstance(max_pages, bool) or not 1 <= max_pages <= 100:
+        if (isinstance(timeout_seconds, bool) or not isinstance(timeout_seconds, (int, float))
+                or not 0 < timeout_seconds <= 15) or not isinstance(max_pages, int) or isinstance(max_pages, bool) or not 1 <= max_pages <= 100:
             return _result(prediction, target, ["invalid network timeout or pagination bound"])
         try:
             markets = _fetch_markets(fetch_page or _fetch_page, timeout_seconds, max_pages)
             # Completion time matters: pagination could cross the start time.
             current = _datetime(get_time())
+        except _MarketResponseValidationError as exc:
+            return _result(prediction, target, [f"Limitless market-data error: {exc}"])
         except (urllib.error.URLError, TimeoutError, OSError, ValueError) as exc:
-            return _result(prediction, target, [f"Limitless market-data error: {type(exc).__name__}: {exc}"])
+            return _result(prediction, target, [f"Limitless market-data error: {type(exc).__name__}"])
     if not isinstance(markets, list) or not all(isinstance(item, dict) for item in markets):
         return _result(prediction, target, ["markets must be a list of objects"])
     rejected = []
