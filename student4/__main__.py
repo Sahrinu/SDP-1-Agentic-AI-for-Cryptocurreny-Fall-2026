@@ -9,6 +9,7 @@ from pathlib import Path
 from .agent import StablecoinAgent
 from .data import CoinGeckoClient, DataError, StablecoinSnapshot, utc_time
 from .paper_trading import PaperTrader
+from .history import export_history
 
 
 def run_demo(output: Path):
@@ -48,10 +49,15 @@ def main(argv=None):
     collect = subparsers.add_parser("collect", help="Fetch live stablecoins and print the agent signal")
     collect.add_argument("--output", type=Path, default=Path("outputs/current.json"))
     collect.add_argument("--previous", type=Path, help="Earlier saved snapshot for liquidity comparison")
+    history = subparsers.add_parser("export-history", help="Export archived snapshots for the team runner")
+    history.add_argument("snapshots", nargs="+", type=Path)
+    history.add_argument("--output", type=Path, default=Path("data/stablecoin.csv"))
     args = parser.parse_args(argv)
     try:
         if args.command == "demo":
             run_demo(args.output)
+        elif args.command == "export-history":
+            export_history(args.snapshots, args.output)
         else:
             # Load baseline before saving, so --previous and --output may share a path.
             previous = StablecoinSnapshot.load(args.previous) if args.previous else None

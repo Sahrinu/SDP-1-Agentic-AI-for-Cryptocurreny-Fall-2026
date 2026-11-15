@@ -10,6 +10,7 @@ requires-python = ">=3.10"
 dependencies = []
 
 [project.optional-dependencies]
+student4-integration = ["pandas>=2,<4"]
 # Student 4 remains usable without extras on Python 3.10. Student 2 requires
 # Python 3.11 or newer because its existing code uses StrEnum and datetime.UTC.
 student2 = [
@@ -31,7 +32,7 @@ student2-aws = ["langchain-aws"]
 license-files = ["licenses/pharos-MIT.txt"]
 
 [tool.setuptools.packages.find]
-include = ["student4*", "student2*"]
+include = ["student4*", "student2*", "risk*"]
 namespaces = true
 
 [tool.setuptools.package-data]

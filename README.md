@@ -39,6 +39,61 @@ python -m pytest tests/test_news_specialist.py tests/test_mood_specialist.py -q
 This contribution retains the Apache 2.0 license notice used by the reused project codebase.
 # Agentic AI for Cryptocurrency — Student 4
 
+### Main-branch integration
+
+The team runner discovers `agents/stablecoin.py`, which exposes
+`forecast(day, data)` and returns `p_up`, evidence, and `data_missing`.
+Install the runner dependency with `python -m pip install -e ".[student4-integration]"`.
+The original standalone collector, agent, and demo remain dependency-free.
+
+Archive one live snapshot near each UTC day end, then export selected snapshots:
+
+```powershell
+python -m student4 export-history outputs/nov06.json outputs/nov07.json --output data/stablecoin.csv
+python experiments/run.py
+```
+
+The CSV has `date`, `source`, `observed_at`, `available_at`, and
+`{usdt,usdc,dai}_{price_usd,market_cap_usd,updated_at}` columns. Timestamps include
+timezones. The exporter uses collection time as availability time; only use
+snapshots actually saved at collection, not historical values downloaded later.
+It rejects multiple snapshots on the same UTC date. Select the snapshot nearest
+the day end before exporting. The adapter uses the completed UTC day's closing
+cutoff, requires a snapshot from its final 15 minutes, and compares same-source
+observations approximately 24 hours apart. Missing or invalid evidence abstains.
+Do not use this daily adapter for an intraday settlement window.
+
+The adapter sums market cap divided by price as a price-adjusted supply proxy.
+It is not an independently measured circulating-supply or mint/burn feed.
+Stable pegs use a smooth, uncalibrated 0.40–0.60 probability heuristic; peg warnings
+suppress the supply signal, and severe peg stress yields 0.40. A single provider
+does not confirm a depeg. These features remain one stablecoin vote to avoid
+double counting related evidence. Multi-source corroboration and a separate
+issuance collector are future work, not implemented capabilities.
+
+For optional execution checks, pass the final ensemble action to:
+
+```python
+from student4.execution import LiquidityQuote, execute_with_quality
+
+decision, trade, quality = execute_with_quality(
+    trader, final_action, btc_price_usd,
+    quote=LiquidityQuote(bid, ask, ask_depth_btc, observed_at),
+    timestamp=decision_time,
+)
+```
+
+Use the actual spread and BTC ask depth available **at or below**
+`btc_price_usd * (1 + trader.slippage)`. Quotes must be at most 30 seconds old.
+Insufficient depth, excessive spread, or missing quotes defer new BUY orders
+without changing the account. `decision` is the exposure approval; `trade` and
+`quality` tell whether execution occurred. Student 5's gateway still sizes each
+BUY and can require a SELL even on HOLD. Liquidity checks do not block SELLs.
+This conservative preflight is optional and does not fetch order books or model
+partial fills. Existing `execute_guarded` callers continue to work.
+
+Validation: `python -m unittest tests.test_student4 tests.test_student4_integration tests.test_runner_abstentions -q`.
+
 Student 4's weekly deliverables: **stablecoin data, Stablecoin agent, and paper trading**.
 This branch provides independent Python components for the team's Bitcoin market engine.
 Requires Python 3.10 or newer; no runtime dependencies or installation needed.

@@ -13,3 +13,4 @@ dist/
 # Student 5 downloaded market data and raw provider responses
 /data/macro.csv
 /data/macro_raw/
+/data/stablecoin.csv
