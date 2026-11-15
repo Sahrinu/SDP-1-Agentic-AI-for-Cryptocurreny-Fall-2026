@@ -14,3 +14,6 @@ dist/
 /data/macro.csv
 /data/macro_raw/
 /data/stablecoin.csv
+/data/borrowing.csv
+/data/borrowing_raw/
+/data/etf_flows.csv

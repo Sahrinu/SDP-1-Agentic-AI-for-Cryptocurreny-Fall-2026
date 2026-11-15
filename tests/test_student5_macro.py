@@ -90,7 +90,7 @@ def test_collector_archives_and_replay_loads(tmp_path, series):
     assert "world_economy" in agents
     day = pd.Timestamp("2026-11-13")
     p = ask_agent("world_economy", agents["world_economy"], day, data_upto(data, day))
-    assert 0.4 <= p < 0.5
+    assert 0.4 <= p.probability < 0.5
 
 
 def test_collector_failure_writes_nothing(tmp_path):

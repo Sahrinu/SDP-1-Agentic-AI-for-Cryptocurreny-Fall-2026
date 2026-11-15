@@ -34,7 +34,7 @@ try {
     $student2Python = Join-Path $student2Venv 'Scripts/python.exe'
     # Build from an isolated copy so setuptools does not alter checkout build or egg-info files.
     New-Item -ItemType Directory -Path $student2BuildRoot, $student2Wheelhouse | Out-Null
-    foreach ($item in @('pyproject.toml', 'student2', 'student4', 'licenses')) {
+    foreach ($item in @('pyproject.toml', 'README.md', 'agents', 'market_data', 'features', 'model_clients', 'exchange', 'risk', 'execution', 'experiments', 'crypto_trading', 'macro', 'tradingagents', 'student2', 'student4', 'licenses')) {
         Copy-Item -LiteralPath (Join-Path $student2Root $item) -Destination $student2BuildRoot -Recurse
     }
     & $student2Python -m pip wheel --retries 0 --timeout 15 --no-deps --wheel-dir $student2Wheelhouse $student2BuildRoot

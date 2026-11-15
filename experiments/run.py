@@ -14,6 +14,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 import sys
 from pathlib import Path
+from types import MappingProxyType
 
 import pandas as pd
 
@@ -58,7 +59,7 @@ def load_agents(agents_dir):
     """Every .py file in agents/ with a forecast() function is an agent."""
     agents = {}
     for f in sorted(Path(agents_dir).glob("*.py")):
-        if f.stem == "template" or f.stem.startswith("_"):
+        if f.stem in {"template", "adapters", "registry", "schemas"} or f.stem.startswith("_"):
             continue
         spec = importlib.util.spec_from_file_location(f"agent_{f.stem}", f)
         module = importlib.util.module_from_spec(spec)
@@ -68,9 +69,13 @@ def load_agents(agents_dir):
             print(f"  could not load {f.name}: {e}")
             continue
         if not hasattr(module, "forecast"):
-            print(f"  skipping {f.name}: no forecast() function")
             continue
-        agents[getattr(module, "AGENT_NAME", f.stem)] = module
+        name = getattr(module, "AGENT_NAME", f.stem)
+        if not isinstance(name, str) or not name.strip():
+            raise ValueError(f"Invalid agent name in {f.name}")
+        if name in agents:
+            raise ValueError(f"Duplicate agent name {name!r}; keep one canonical implementation")
+        agents[name] = module
     return agents
 
 
@@ -166,7 +171,7 @@ def _ask_registered_agent(name, module, student2_names, day, view, window_error)
     if is_student2_betting:
         # Only the evidence-validating Student 2 adapter may forecast; legacy
         # odds adapters could return a market payout price as the prediction.
-        from student2.integration_adapter import Student2Adapter
+        from agents.adapters import Student2Adapter
         if type(module) is not Student2Adapter or module.kind != "betting_odds":
             reason = "Betting Odds unavailable: no compatible verified live evidence"
             if window_error:
@@ -180,7 +185,37 @@ def _ask_registered_agent(name, module, student2_names, day, view, window_error)
 def evaluate_agents(agents, student2_names, day, view, window_error):
     forecasts, abstentions = {}, {}
     for name, module in agents.items():
+        if getattr(module, "FORECAST_STAGE", None) == "ensemble":
+            continue
         answer = _ask_registered_agent(name, module, student2_names, day, view, window_error)
+        if answer.probability is None:
+            abstentions[name] = answer.reason
+        else:
+            forecasts[name] = answer.probability
+    return evaluate_ensemble_agents(agents, student2_names, day, view, window_error,
+                                    forecasts, abstentions)
+
+
+def evaluate_ensemble_agents(agents, student2_names, day, view, window_error,
+                             forecasts, abstentions):
+    """All second-stage agents read the same frozen first-stage probabilities.
+
+    Reused after news attacks so Contrarian never keeps its clean response when
+    the attacked peer changed. No independent model needs to be called twice.
+    """
+    forecasts, abstentions = dict(forecasts), dict(abstentions)
+    dependent = {n: m for n, m in agents.items()
+                 if getattr(m, "FORECAST_STAGE", None) == "ensemble"}
+    base = {n: p for n, p in forecasts.items() if n not in dependent}
+    staged_view = dict(view)
+    staged_view["peer_forecasts"] = MappingProxyType({
+        "day": day.strftime("%Y-%m-%d"),
+        "probabilities": MappingProxyType(base),
+    })
+    for name, module in dependent.items():
+        forecasts.pop(name, None)
+        abstentions.pop(name, None)
+        answer = _ask_registered_agent(name, module, student2_names, day, staged_view, window_error)
         if answer.probability is None:
             abstentions[name] = answer.reason
         else:
@@ -191,8 +226,13 @@ def evaluate_agents(agents, student2_names, day, view, window_error):
 # ---------- main loop ----------
 
 def run(start, end, attack_days, data_dir, agents_dir, out_dir, *,
-        student2_adapters=None, student2_inputs=None, settlement_contract=None):
+        student2_adapters=None, student2_inputs=None, settlement_contract=None,
+        paper_policy=None, synthetic=False):
     print("Loading data and agents...")
+    if paper_policy is not None:
+        paper_out = Path(out_dir) / "paper"
+        if paper_out.exists() and any(paper_out.iterdir()):
+            raise FileExistsError("paper output is not empty; choose a new output directory")
     data = load_data(data_dir)
     agents = load_agents(agents_dir)
     student2_adapters = dict(student2_adapters or {})
@@ -202,6 +242,8 @@ def run(start, end, attack_days, data_dir, agents_dir, out_dir, *,
     student2_names = set(student2_adapters)
     if "btc_prices" not in data:
         sys.exit("Need data/btc_prices.csv (with date and close columns) to settle the bets.")
+    if paper_policy is not None and paper_policy.execution == "next_open" and "open" not in data["btc_prices"]:
+        raise ValueError("next_open paper execution requires BTC open prices; explicitly choose next_close for close-only inputs")
     if not agents:
         sys.exit("No agents found.")
     news_agents = [n for n in agents if "news" in n.lower()]
@@ -263,6 +305,9 @@ def run(start, end, attack_days, data_dir, agents_dir, out_dir, *,
                     attack_abstentions[name] = answer.reason
                 else:
                     attacked[name] = answer.probability
+            attacked, attack_abstentions = evaluate_ensemble_agents(
+                agents, student2_names, day, attacked_view, error, attacked, attack_abstentions,
+            )
             team_attacked = combine(ex, attacked)
             comparable = (bool(news_agents) and set(forecasts) == set(attacked)
                           and all(name in forecasts and name in attacked for name in news_agents))
@@ -288,6 +333,9 @@ def run(start, end, attack_days, data_dir, agents_dir, out_dir, *,
     results = pd.DataFrame(rows)
     coins = pd.DataFrame(coin_rows)
     attacks = pd.DataFrame(attack_rows, columns=["date", "method", "headline", "clean", "attacked", "shift", "comparable", "comparison_reason", "clean_active_agents", "attacked_active_agents", "attacked_abstentions"])
+
+    from experiments.evaluation import paired_brier
+    uncertainty = {m: paired_brier(results[m], results["went_up"]) for m in METHODS}
 
     # ---------- summary ----------
     summary = []
@@ -316,6 +364,17 @@ def run(start, end, attack_days, data_dir, agents_dir, out_dir, *,
     attacks.to_csv(out / "attack.csv", index=False)
     summary.to_csv(out / "summary.csv", index=False)
 
+    (out / "uncertainty.json").write_text(json.dumps(uncertainty, indent=2) + "\n", encoding="utf-8")
+
+    if paper_policy is not None:
+        from experiments.paper import replay_portfolios
+        paper_summary = replay_portfolios(
+            data["btc_prices"], results, attacks, out / "paper",
+            policy=paper_policy, synthetic=synthetic,
+        )
+        print("\nPaper-trading accounts (simulated money; separate from agent coins):")
+        print(paper_summary[["scenario", "method", "return_pct", "trade_count"]].to_string(index=False))
+
     print(f"\nRan {len(agents)} agents over {len(days)} days ({days[0].date()} to {days[-1].date()}), "
           f"{len(attack_set)} attack days.")
     print("\nFinal coins:")
@@ -336,13 +395,27 @@ if __name__ == "__main__":
     parser.add_argument("--agents-dir", default=str(ROOT / "agents"))
     parser.add_argument("--out", default=str(ROOT / "experiments" / "results"))
     parser.add_argument("--student2-inputs", help="JSON with days and settlement metadata; registers offline Student 2 adapters")
+    parser.add_argument("--paper", action="store_true", help="Connect forecasts to risk-approved paper portfolios")
+    parser.add_argument("--execution", choices=["next_open", "next_close"], default="next_open",
+                        help="next_open needs daily UTC open prices; next_close is a delayed fallback")
+    parser.add_argument("--circuit-breaker", action="store_true", help="Block new risk on drawdown/forecast jumps, missing inputs or fewer than five active agents")
+    parser.add_argument("--buy-threshold", type=float, default=0.55)
+    parser.add_argument("--sell-threshold", type=float, default=0.45)
+    parser.add_argument("--synthetic", action="store_true", help="Label this run's data and agents as synthetic")
     args = parser.parse_args()
     extras = {}
+    if args.paper:
+        from experiments.paper import TradingPolicy
+        extras["paper_policy"] = TradingPolicy(
+            buy_threshold=args.buy_threshold, sell_threshold=args.sell_threshold,
+            execution=args.execution, circuit_breaker=args.circuit_breaker,
+        )
+        extras["synthetic"] = args.synthetic
     if args.student2_inputs:
-        from student2.integration_adapter import Student2Adapter
+        from agents.adapters import Student2Adapter
         bundle = json.loads(Path(args.student2_inputs).read_text(encoding="utf-8-sig"))
         adapters = [Student2Adapter(kind) for kind in ("news", "mood", "betting_odds")]
-        extras = dict(student2_adapters={a.AGENT_NAME: a for a in adapters},
+        extras.update(student2_adapters={a.AGENT_NAME: a for a in adapters},
                       student2_inputs=bundle["days"], settlement_contract=bundle["settlement"])
 
     run(args.start, args.end, args.attack_days, args.data_dir, args.agents_dir, args.out, **extras)

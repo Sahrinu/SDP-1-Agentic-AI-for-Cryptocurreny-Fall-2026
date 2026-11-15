@@ -1,9 +1,11 @@
-"""Vendor data errors used by the local Yahoo compatibility helpers."""
+"""Compatibility import. Edit market_data/errors.py instead; this file has no implementation."""
 
+import importlib as _importlib
+import sys as _sys
 
-class VendorError(Exception):
-    """Base for conditions where a vendor could not return usable data."""
-
-
-class VendorUnavailableError(VendorError):
-    """A vendor could not answer because a request was throttled or failed."""
+_implementation = _importlib.import_module("market_data.errors")
+if __name__ == "__main__":
+    if hasattr(_implementation, "main"):
+        raise SystemExit(_implementation.main())
+else:
+    _sys.modules[__name__] = _implementation

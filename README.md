@@ -1,270 +1,797 @@
-# Student 5 contribution
+# Bitcoin Agent Exchange
 
-World economy forecasting, daily Yahoo macro inputs with bounded weekend forward
-fill, and the 25% BTC exposure gateway are documented in
-[Student 5 implementation](docs/student5.md). The
-[project Gantt template](docs/gantt.md) covers 14 September–24 November 2026.
-Run `python examples/student5_demo.py` for the offline synthetic demonstration.
-The final team trading pipeline must call the risk gateway before execution.
+A Bitcoin multi-agent research prototype that compares coin-weighted forecasts,
+majority voting and a simple average, then tests how fake news changes forecasts
+and simulated trading. Paper accounts use simulated USD and BTC; agent coins are
+separate influence weights. No component places real exchange orders.
 
-# Student 2 — News and Mood Specialists
+**Current scope:** all 13 specialist roles now have a daily forecast interface,
+including new Chart, Long-term, Network and Miner adapters. Available inputs
+control participation: an installed module does not imply a usable forecast.
+A local dashboard collects live evidence, shows all abstentions, compares the
+Exchange/vote/average, and records persistent, risk-constrained paper decisions.
+Model components use Gemini only when explicitly requested and locally configured.
+The bundled workflow replay remains synthetic and is not a research result.
 
-This repo contains the contribution package for the Bitcoin News Specialist and Mood Specialist, prepared in a self-contained form without depending on the original TradingAgents project.
+This is the project's **single documentation guide**. All paths below are relative
+to the repository root. Change an implementation at its canonical location;
+`student1/`, `student2/`, `student4/`, `crypto_trading/`, `macro/` and `tradingagents/` retain compatibility imports,
+historical artifacts or verification helpers, not competing agent implementations.
 
-## Included
+## Contents
 
-- `student2/agents/news_specialist.py` — filtered evidence-based Bitcoin forecast logic.
-- `student2/agents/mood_specialist.py` — Alternative.me Fear & Greed sentiment signal.
-- `student2/agents/schemas.py` — shared structured result schema used by both specialists.
-- `student2/compat/yahoo_compat.py` — minimal compatibility helpers for article extraction.
-- `tests/test_news_specialist.py` — mock validation for filtering and prompt neutrality.
-- `tests/test_mood_specialist.py` — mock validation for sentiment output.
-- `tests/fixtures/news_specialist_fake_headline/` — synthetic-article experiment fixtures and manifest.
+- [Setup](#setup)
+- [Quick demonstrations](#quick-demonstrations)
+- [Live dashboard and demo-day workflow](#live-dashboard-and-demo-day-workflow)
+- [Folder and component map](#folder-and-component-map)
+- [All 13 specialists](#all-13-specialists)
+- [Agent interface and registration](#agent-interface-and-registration)
+- [Forecast and paper-trading replay](#forecast-and-paper-trading-replay)
+- [Data sources and timing](#data-sources-and-timing)
+- [Model-backed specialist contract](#model-backed-specialist-contract)
+- [Prediction-market evidence and live tools](#prediction-market-evidence-and-live-tools)
+- [Risk and execution rules](#risk-and-execution-rules)
+- [Tests and compatibility](#tests-and-compatibility)
+- [Schedule and responsibilities](#schedule-and-responsibilities)
+- [Saved examples and provenance](#saved-examples-and-provenance)
+- [Remaining work](#remaining-work)
+- [Attribution](#attribution)
 
-## Run tests
+## Setup
 
-```powershell
-cd "C:\Users\Fatema Tariq\Downloads\SDP-1-Agentic-AI-for-Cryptocurreny-Fall-2026"
-python -m pytest tests/test_news_specialist.py tests/test_mood_specialist.py -q
-```
-
-## Notes
-
-- Synthetic provenance stays in the experiment manifest only.
-- The neutral experimental prompt wording preserves the filtered article set without exposing the synthetic label.
-- No `.env`, API keys, or secret material are included in this package.
-
-## License
-
-This contribution retains the Apache 2.0 license notice used by the reused project codebase.
-# Agentic AI for Cryptocurrency — Student 4
-
-### Main-branch integration
-
-The team runner discovers `agents/stablecoin.py`, which exposes
-`forecast(day, data)` and returns `p_up`, evidence, and `data_missing`.
-Install the runner dependency with `python -m pip install -e ".[student4-integration]"`.
-The original standalone collector, agent, and demo remain dependency-free.
-
-Archive one live snapshot near each UTC day end, then export selected snapshots:
-
-```powershell
-python -m student4 export-history outputs/nov06.json outputs/nov07.json --output data/stablecoin.csv
-python experiments/run.py
-```
-
-The CSV has `date`, `source`, `observed_at`, `available_at`, and
-`{usdt,usdc,dai}_{price_usd,market_cap_usd,updated_at}` columns. Timestamps include
-timezones. The exporter uses collection time as availability time; only use
-snapshots actually saved at collection, not historical values downloaded later.
-It rejects multiple snapshots on the same UTC date. Select the snapshot nearest
-the day end before exporting. The adapter uses the completed UTC day's closing
-cutoff, requires a snapshot from its final 15 minutes, and compares same-source
-observations approximately 24 hours apart. Missing or invalid evidence abstains.
-Do not use this daily adapter for an intraday settlement window.
-
-The adapter sums market cap divided by price as a price-adjusted supply proxy.
-It is not an independently measured circulating-supply or mint/burn feed.
-Stable pegs use a smooth, uncalibrated 0.40–0.60 probability heuristic; peg warnings
-suppress the supply signal, and severe peg stress yields 0.40. A single provider
-does not confirm a depeg. These features remain one stablecoin vote to avoid
-double counting related evidence. Multi-source corroboration and a separate
-issuance collector are future work, not implemented capabilities.
-
-For optional execution checks, pass the final ensemble action to:
-
-```python
-from student4.execution import LiquidityQuote, execute_with_quality
-
-decision, trade, quality = execute_with_quality(
-    trader, final_action, btc_price_usd,
-    quote=LiquidityQuote(bid, ask, ask_depth_btc, observed_at),
-    timestamp=decision_time,
-)
-```
-
-Use the actual spread and BTC ask depth available **at or below**
-`btc_price_usd * (1 + trader.slippage)`. Quotes must be at most 30 seconds old.
-Insufficient depth, excessive spread, or missing quotes defer new BUY orders
-without changing the account. `decision` is the exposure approval; `trade` and
-`quality` tell whether execution occurred. Student 5's gateway still sizes each
-BUY and can require a SELL even on HOLD. Liquidity checks do not block SELLs.
-This conservative preflight is optional and does not fetch order books or model
-partial fills. Existing `execute_guarded` callers continue to work.
-
-Validation: `python -m unittest tests.test_student4 tests.test_student4_integration tests.test_runner_abstentions -q`.
-
-Student 4's weekly deliverables: **stablecoin data, Stablecoin agent, and paper trading**.
-This branch provides independent Python components for the team's Bitcoin market engine.
-Requires Python 3.10 or newer; no runtime dependencies or installation needed.
-
-## Run the offline demo
-
-From the repository root:
+Use Python **3.11 or newer** for the unified project. From the repository root:
+Use a fresh virtual environment when migrating an installation of the earlier
+student-specific distribution to this shared package layout.
 
 ```bash
-python3 -m student4 demo
+python -m venv .venv
+# macOS/Linux
+source .venv/bin/activate
+# Windows PowerShell instead: .\.venv\Scripts\Activate.ps1
+python -m pip install -e ".[test,macro]"
 ```
 
-On Windows, use `py -m student4 demo`. All stablecoin data and BTC prices in this
-demo are **synthetic**, replayed against a fixed historical clock. It starts with
-$10,000 of simulated USD cash, charges 0.1% per trade and 5 basis points of adverse
-slippage, and shows:
-
-1. HOLD: stable pegs, no earlier snapshot.
-2. BUY: stablecoin market capitalisation increases 2% over 24 hours.
-3. HOLD: USDC reaches $0.99, triggering the peg warning.
-4. SELL: USDC reaches $0.97, triggering the peg stress rule.
-
-Outputs go to `outputs/demo/`: four saved snapshots, `signals.json`, `trades.csv`,
-and `portfolio.json`. Use `--output PATH` to select another directory. Repeating
-a demo overwrites its output files and starts a new account.
-
-## Live stablecoin data
-
-The collector uses CoinGecko's
-[`/simple/price` endpoint](https://docs.coingecko.com/demo/reference/simple-price)
-for USDT (`tether`), USDC (`usd-coin`), and DAI (`dai`). It collects USD prices,
-market capitalisation, 24-hour volume, and each quote's provider timestamp in
-one request. Set a CoinGecko **Demo API key** in your environment:
+The core installs pandas; `test` adds pytest, and `macro` adds Yahoo download
+support. For the model-backed specialists and read-only market-book tools:
 
 ```bash
-export COINGECKO_DEMO_API_KEY='your-demo-key'
-python3 -m student4 collect --output outputs/baseline.json
+python -m pip install -e ".[specialists,live,test,macro]"
 ```
 
-PowerShell equivalent: `$env:COINGECKO_DEMO_API_KEY = 'your-demo-key'`.
-Later, collect a second snapshot and compare it with the first:
+The specialist extra installs Pydantic, Google GenAI, LangChain Core,
+python-dotenv, Yahoo support and timezone data. The live extra adds Socket.IO.
+Provider-specific extras `student2-google`, `student2-openai`,
+`student2-anthropic` and `student2-aws` remain available for the optional model
+clients. Installing a client does not authorize or trigger model calls.
+
+Keep keys outside Git. CoinGecko live collection uses
+`COINGECKO_DEMO_API_KEY`. News/Mood live model commands may use `GOOGLE_API_KEY`
+or `GEMINI_API_KEY`; the model-client factory also supports provider-specific
+configuration. Explicitly inject the chosen model client into replay adapters.
+Use the configured environment rather than depending on an unrelated sibling
+TradingAgents checkout. No credentials are needed for the offline demos or tests.
+
+Old installation extras and requirements files remain compatibility entry points;
+new setup instructions belong here, not in student-specific README files.
+
+## Quick demonstrations
 
 ```bash
-python3 -m student4 collect --previous outputs/baseline.json --output outputs/current.json
+# Inspect the single agent catalog without calling models or data providers
+python -m agents
+
+# Synthetic forecast -> risk -> independent clean/attacked paper accounts
+python examples/paper_replay_demo.py
+
+# Actual Borrowing/ETF/Crash/Contrarian code on labelled synthetic inputs
+python examples/new_agents_demo.py
+
+# Macro forward fill plus capped buys and overweight liquidation
+python examples/student5_demo.py
+
+# Independent stablecoin component demo (synthetic; not the whole ensemble)
+python -m market_data.stablecoin demo
 ```
 
-`collect` saves the snapshot and prints the agent decision as JSON. It does not
-execute trades. Keys are sent in the request header. The client has a 15-second
-timeout and reports API, authentication, rate-limit, incomplete-data, and stale-data
-errors. It never substitutes demo data for a live failure. No automatic retry loop
-is used; retry later if rate limited. The demo and tests need no API key.
+The paper and new-agent demos create timestamped `outputs/` directories. Their
+input observations are synthetic and must not be presented as real-agent returns.
+The standalone stablecoin demo writes `outputs/demo/`, can overwrite that demo
+folder, and deliberately feeds its own signal directly to the simulator. Use the
+connected replay for the ensemble and mandatory risk checks.
 
-## Stablecoin agent rules
+## Live dashboard and demo-day workflow
 
-The agent produces a **BTC market signal**, rather than buying or selling stablecoins.
-Its rules run in priority order:
+**Live decision room:** generating a forecast queues all 13 specialists and
+publishes real start/completion events, public evidence, probabilities and
+measured durations. The current evaluator runs sequentially; Contrarian runs
+last using completed peer forecasts. The UI polls faster while work is running,
+shows queued/evaluating/forecasted/abstained/failed states, and retains the latest
+run timeline after completion. Fast numerical agents can finish between refreshes;
+no artificial processing delay or simulated thinking is added. Only returned
+public evidence is shown, not private model reasoning. The activity trace is
+included in each saved forecast JSON. Interrupted runs distinguish unreached
+agents from returned abstentions. Forecast generation does not place a trade.
 
-| Condition | Action | Score |
+
+The interface uses a warm grey professional light theme and a market-terminal layout inspired by CoinMarketCap and
+TradingView: real BTC daily candlesticks, source volume, EMA overlays, range
+selection, a line/candle toggle, pointer crosshair, and an expandable chart.
+The specialist table supports search, participation filters and evidence reports;
+research results and paper decisions stay separate from the market chart.
+Only retrieved values are plotted; missing price/volume statistics remain empty.
+It uses local HTML/CSS/JavaScript with no third-party chart scripts or trackers.
+
+**Gemini session key:** click **Connect Gemini** and paste the key into the masked
+field inside the local dashboard. It is held only in the running server's memory,
+not environment variables, files, SQLite, browser storage, saved forecasts or Git.
+The browser clears the input after submission/closing. Only a configured flag and
+source are returned to the UI. The key is sent to Google when you explicitly run
+a Gemini forecast/debate. Setting it makes no validation/model request by itself.
+**Clear session key** removes the session override; an existing environment key
+remains available. Restarting the server clears the session override. Do not put
+keys in chat or commit them. See Google's [API key guidance](https://aistudio.google.com/docs/api-key).
+
+
+```bash
+pip install -e '.[test,macro,specialists,live]'
+# Set GOOGLE_API_KEY or GEMINI_API_KEY privately in your local environment.
+# Optional: GEMINI_MODEL, COINGECKO_DEMO_API_KEY. Never commit keys.
+python -m dashboard
+```
+
+Open <http://127.0.0.1:8765>. The server binds only to loopback. Choose **Refresh
+market data**, **Generate 24h forecast**, then **Record paper decision**. A separate
+**Compare Bull / Bear / Judge** button makes three Gemini calls over the same
+audited reports; it does not add three extra specialist votes. No refresh makes
+model calls or creates trades. Capture/configure inputs before the presentation;
+provider failure appears as an abstention rather than fabricated data.
+
+The best demonstration pairs a fresh forecast (outcome due tomorrow) with a
+completed historical replay (outcomes visible immediately). **Replay real BTC history** runs the latest 60 settled days from the collected
+candles with the three price specialists and Contrarian; all missing non-price
+sources abstain. The participation guard blocks new BUYs with only four active
+agents. Its probabilities, paper accounts, baselines and uncertainty outputs are
+saved under `outputs/dashboard/real_replays/`. This is not the full 13-agent study.
+The separate bundled replay is prominently **synthetic** and demonstrates the
+pipeline only. A full performance study needs archived non-price evidence too.
+
+The live target is strictly higher BTCUSDT at decision time +24h, with ties down.
+Both reference and target use the last completed one-minute Binance close at or
+before the exact timestamp. It is a recent observed reference, not a tick-perfect
+execution guarantee. Only completed UTC daily candles feed daily price agents.
+The latest 1,100 closes support Long-term's 791-day minimum warmup. Every live
+forecast is an independent initially equal-coin Exchange; this dashboard does not
+pretend that its weights have learned from unresolved live outcomes.
+
+The synthetic replay uses the repository test fixtures and requires a checkout;
+the installed dashboard HTML is also included as package data.
+
+Live archives are in `outputs/dashboard/snapshots/`; full forecasts, evidence,
+weights and model token/latency usage are in `outputs/dashboard/forecasts/`.
+`outputs/dashboard/paper.sqlite3` atomically persists account state, breaker state,
+trades and unique decision IDs across server restarts. The dashboard requires a
+new fresh forecast after restart. A three-minute forecast/quote age limit applies
+to paper decisions. BUY requires five active agents so the 20% influence cap is
+feasible; unavailable/audit-failed agents are excluded. A 10% drawdown or forecast
+jump greater than 25 percentage points latches the breaker. SELL and mandatory
+25% gateway liquidations remain available. Breaker reset is deliberately not a
+web button; inspect and retain the ledger before any manual account reset.
+
+| Input | Live connection | Timing and remaining requirements |
 | --- | --- | --- |
-| Unusable, incomplete, or stale current data | HOLD | 0 |
-| Any tracked coin deviates at least 2% above or below $1 | SELL | -1 |
-| Any tracked coin deviates at least 0.5%, but less than 2% | HOLD | 0 |
-| Stable pegs and aggregate market cap grows at least 1% from the baseline | BUY | +1 |
-| Stable pegs and aggregate market cap falls at least 1% from the baseline | SELL | -1 |
-| Smaller change, absent baseline, or invalid baseline | HOLD | 0 |
+| BTC prices | Binance daily candles and completed one-minute reference | Crypto trades weekends; historical bars are features, current minute is the contract reference |
+| Network/Miner | Coin Metrics community API | Daily publication delay; actual retrieval timestamp retained, incomplete current day excluded |
+| Macro | Yahoo `DX-Y.NYB` and `^TNX` | Daily market proxies; forward fill holidays/weekends up to four calendar days, retain original session date; no claim of zero lag |
+| Borrowing | Binance USD-M funding + OI | Recent completed history, receipt timestamps; older OI requires an archive |
+| News | Existing Yahoo Bitcoin news fetch | Timestamped articles plus locally configured Gemini |
+| Mood | Alternative.me Fear & Greed | Daily readings plus Gemini; not a real-time social stream |
+| Stablecoin | CoinGecko | Local demo key; prospective same-source snapshots approximately 24h apart; no fabricated baseline |
+| ETF | Reviewed `data/etf_flows.csv` import | Complete sourced flows and real availability timestamps; ETF prices are not fund flows |
+| Betting odds | Existing validated Limitless capture tools | Still requires a fresh book and supported event rules; dashboard does not silently substitute REST payout prices |
 
-Thresholds are configurable through `StablecoinAgent(...)`. Quotes and snapshot
-timestamps may be at most 15 minutes old and at most 60 seconds ahead of the
-decision clock. The baseline must contain the same coins, have usable quotes at
-its own observation time, come from the same source, and precede the current
-snapshot. Each current provider quote must also be newer than its baseline quote.
-The reported comparison interval is the actual elapsed time; it is not assumed
-to be 24 hours. Do not compare intervals interchangeably when evaluating the rules.
+DXY is an index, Yahoo is a provider, and FRED is another provider: they are not
+three equivalent data series. Yahoo dollar/yield proxies suit this prototype's
+frequent market context better than slowly released macro indicators. They still
+have market hours, delays and revisions. Forward filling preserves the last known
+observation; it does not create new weekend information. Newly retrieved vintages
+are eligible for today's live forecast, not backdated historical forecasts.
 
-Stablecoin market cap is a **liquidity proxy**. It does not directly measure exchange
-inflows, circulating issuance, or Bitcoin demand; price changes can also move market
-cap. These are transparent classroom heuristics without a trained model, LLM,
-calibrated confidence, or validated predictive performance. A single-provider peg
-stress signal is not a confirmed multi-source depeg incident.
+`risk/auditor.py` checks result schema, evidence presence, supplied citation IDs
+when available and timestamps. It is a deterministic validator, not independent
+news verification. `risk/circuit_breaker.py` pauses new risk; `risk/gateway.py`
+continues enforcing the cost-aware 25% total BTC/equity ceiling.
 
-## Integration for Student 3
+For the historical runner, add `--paper --circuit-breaker` to enable the breaker
+and minimum-participation guard. The switch is opt-in to preserve reproducibility
+of older saved experiments. Every new runner execution also saves
+`uncertainty.json`: missing forecasts are excluded, with circular seven-day block
+bootstrap Brier intervals. Small samples remain unreliable.
 
-```python
-from student4 import CoinGeckoClient, StablecoinAgent, StablecoinSnapshot, PaperTrader
-
-current = CoinGeckoClient().fetch()
-previous = StablecoinSnapshot.load("outputs/baseline.json")  # optional historical baseline
-decision = StablecoinAgent().analyze(current, previous)
-
-# Pass decision.action to majority vote, or decision.score to simple average.
-print(decision.to_dict())
-```
-
-Every decision contains `agent`, `action`, `score`, `reason`, and `metrics`.
-Scores use **-1 = SELL, 0 = HOLD, +1 = BUY**. The market engine should aggregate
-this signal with the other agents before paper execution. Catch `DataError` if
-collection fails; record that agent as unavailable or HOLD according to the
-team's policy. API failures must not result in stale signals being reused.
-
-The paper trader accepts the final ensemble action and the BTC/USD price from
-Student 1's data feed:
-
-```python
-trader = PaperTrader(initial_cash="10000", fee_rate="0.001", slippage_bps="5")
-
-# Example inputs from the team's engine and price feed:
-final_action = "BUY"
-btc_price_usd = "60000"
-approved_cash_fraction = "0.10"
-
-trader.execute(final_action, btc_price_usd, buy_fraction=approved_cash_fraction)
-print(trader.summary(btc_price_usd))
-trader.export("outputs/paper", btc_price_usd)
-```
-
-Keep the same `trader` instance across market cycles. BUY spends the supplied
-fraction of available USD cash **including fees**, rounded down to whole satoshis;
-its default is all available cash. Repeated BUY calls may add to a position.
-SELL closes the whole BTC position; SELL with no holdings and HOLD create no
-trade. No borrowing, short selling, leverage, or exchange orders are supported.
-Cash is simulated fiat USD, so stablecoin peg changes do not revalue the cash balance.
-
-Balances and accounting use `Decimal`. Buy fees enter cost basis; sell fees
-reduce realised profit. Equity marks BTC to the supplied price and excludes
-hypothetical future liquidation costs. CSV trade records include execution
-prices, fees, quantities, balances, and realised profit or loss. The JSON report
-includes equity, realised/unrealised/total P&L, return, and total fees.
-Reports are exports; automatic account restoration after a process restart is
-not implemented. Supply UTC-aware chronological timestamps for historical replay;
-live calls default to the current UTC time.
-
-Student 5's **25% risk rule** should approve position sizing before calling this
-component. `buy_fraction` is a cash allocation, not a maximum-loss or total-portfolio
-exposure rule. The risk engine remains responsible for enforcing the team's
-precise policy. The component demo feeds its own agent directly into the simulator
-only to demonstrate Student 4's work independently.
-
-## Tests
+Cost-matched trading baselines have their own command:
 
 ```bash
-python3 -m unittest discover -s tests -v
+python -m experiments.evaluation --prices data/btc_prices.csv --start 2026-09-01 --end 2026-10-31 --output outputs/baselines_capped
+# Add --uncapped for conventional full-allocation buy-and-hold/SMA comparisons.
 ```
 
-Alternatively, run `python3 -m pytest -q` if pytest is installed. Tests exercise
-data validation, mocked API success/failures, exact peg boundaries, stale data,
-baseline comparisons, order validation, fee/slippage accounting, P&L reconciliation,
-exports, and the complete offline CLI demo. Live API authentication is not part
-of the offline test suite.
+Supply at least 50 warmup daily closes and the day after the final forecast.
+Signals use D close and execute at D+1 open with the same 0.10% fee and 5 bps
+slippage. Capped allocation can be liquidated by the gateway after price drift;
+it is explicitly distinguished from conventional uncapped buy-and-hold. These
+utilities generate results only from supplied prices; they do not supply a
+completed real-data study or repeated model attack experiment.
 
-## Files and open-source attribution
+## Folder and component map
 
-| File | Responsibility |
+New live-demo components: `dashboard/__main__.py` serves the local UI;
+`dashboard/index.html`, `dashboard/styles.css` and `dashboard/app.js` contain its interface;
+`dashboard/credentials.py` isolates the memory-only session key;
+`dashboard/activity.py` records thread-safe forecast execution events; `dashboard/service.py` connects
+forecasting, audits and the persistent paper account. `market_data/live.py`
+collects live vintages, using certificate-verified transport in
+`market_data/http.py`. `model_clients/demo_gemini.py` bridges the existing Gemini
+specialists; `experiments/debate.py` implements the separate debate baseline.
+`experiments/evaluation.py` supplies trading baselines and bootstrap statistics.
+`risk/auditor.py` and `risk/circuit_breaker.py` contain the added validators.
+
+
+| Canonical location | Responsibility | Important files |
+| --- | --- | --- |
+| `agents/` | Agent interface, roster, adapters and daily forecasts | `registry.py`, `adapters.py`, `schemas.py`, `template.py` |
+| `agents/specialists/` | Model-backed implementations and the standalone stablecoin signal | `news_specialist.py`, `mood_specialist.py`, `betting_odds_specialist.py`, `market_evidence_specialist.py`, `stablecoin_signal.py` |
+| `market_data/` | Macro, borrowing, ETF input preparation and Yahoo helpers | `macro.py`, `borrowing.py`, `etf.py`, `yahoo.py` |
+| `market_data/bitcoin/` | Student 1 Binance Spot candles, archived daily history and download CLI | `binance.py`, `history.py`, `__main__.py` |
+| `features/` | Shared technical-indicator calculations | `technical.py` |
+| `market_data/stablecoin/` | CoinGecko snapshots, peg math, historical export and CLI | `data.py`, `peg.py`, `history.py`, `__main__.py` |
+| `market_data/prediction_markets/` | Limitless book collection/discovery, Binance context and contract checks | `limitless_live.py`, `limitless_targeted_discovery.py`, `market_price_context.py`, `binance_raw_context.py`, `threshold_market_evidence.py` |
+| `model_clients/` | Shared model-provider clients and configuration | `factory.py`, `api_key_env.py`, provider modules |
+| `exchange/` | Agent coins, forecast weights and comparisons | `engine.py`, `vote.py`, `average.py` |
+| `risk/` | Mandatory 25% BTC exposure approval | `gateway.py` |
+| `execution/` | Paper-account accounting and optional execution-quality gate | `paper_trading.py`, `quality.py` |
+| `experiments/` | Historical forecast/attack runner and portfolio replay | `run.py`, `paper.py` |
+| `examples/` | Reproducible runnable demonstrations | The three demo scripts above |
+| `tests/` | Offline tests and clearly labelled fixtures | `fake_agents/` are test agents, not research specialists |
+| `data/` | User-supplied point-in-time CSVs and downloaded local data | See the data contracts below |
+| `outputs/` | Generated results, raw snapshots and demonstrations | Ignored by Git |
+| `student2/examples/` | Previously saved historical evidence | Preserved unchanged; not current live outputs |
+| `student2/verification/` | Packaged PowerShell transports and installation checks | Preserved so existing workflows keep working |
+| `student4/fixtures/` | Legacy stablecoin demo scenario | Synthetic packaged fixture |
+| `student2/`, `student4/`, `macro/`, `tradingagents/` | Compatibility modules | Forward imports to canonical implementations |
+| `licenses/`, `LICENSE` | Third-party and project licensing | Preserve when moving or reusing code |
+
+The old `world_econompy.py` spelling is an import alias for
+`agents/world_economy.py`; it is not registered as another agent. The standalone
+stablecoin action signal and its daily probability adapter represent **one**
+stablecoin specialist, not two votes. Evidence enrichment tools are not extra
+voting agents either.
+
+## All 13 specialists
+
+| # | Specialist | Canonical implementation | Readiness and input |
+| --- | --- | --- | --- |
+| 1 | Chart | `agents/chart.py` | 70 completed BTC daily closes; EMA/MACD heuristic. Student 1 descriptive reports remain in `agents/specialists/` |
+| 2 | Borrowing | `agents/borrowing.py` | Funding/OI CSV, six consecutive completed days |
+| 3 | Network | `agents/network.py` | Eight consecutive published active-address/transaction days; Coin Metrics collector |
+| 4 | Miner | `agents/miner.py` | Eight published hash-rate/fee days; measures health proxies, not actual miner sales |
+| 5 | Stablecoin | `agents/stablecoin.py` | Archived near-day-end snapshots; price-adjusted supply and peg heuristic |
+| 6 | ETF | `agents/etf.py` | Complete timestamped aggregate US spot-BTC ETF net flows |
+| 7 | News | `agents/specialists/news_specialist.py` via `agents/adapters.py` | Explicit model client, timestamped articles and agreed settlement contract |
+| 8 | Mood | `agents/specialists/mood_specialist.py` via `agents/adapters.py` | Explicit model client and historical sentiment snapshots |
+| 9 | World economy | `agents/world_economy.py` | Yahoo DXY and Treasury-yield macro CSV |
+| 10 | Betting odds | `agents/specialists/betting_odds_specialist.py` and evidence model via `agents/adapters.py` | Validated market book, explicit model and matching team event |
+| 11 | Crash | `agents/crash.py` | 91 consecutive completed daily BTC closes |
+| 12 | Long-term | `agents/long_term.py` | 791 completed daily closes minimum; walk-forward residual-neighbour frequency. Original descriptive fit retained |
+| 13 | Contrarian | `agents/contrarian.py` | Second stage; at least three valid same-day independent forecasts |
+
+The implemented rule-based agents produce uncalibrated research heuristics,
+not trained or statistically validated next-day probabilities. Borrowing uses a
+funding/OI crowding rule (0.38–0.62); ETF uses the mean of three flow reports
+(0.40–0.60); Crash uses historical tail loss and drawdown (0.35–0.50); World
+economy uses dollar/yield pressure (0.40–0.60). Their coefficients and thresholds
+need held-out evaluation. The Crash implementation does not claim to reproduce
+a specific paper's estimator.
+
+## Agent interface and registration
+
+New daily agents implement:
+
+```python
+AGENT_NAME = "unique_name"
+
+def forecast(day, data):
+    return {
+        "agent": AGENT_NAME,
+        "day": day,
+        "p_up": 0.5,
+        "evidence": ["explain input dates and calculation"],
+        "data_missing": False,
+    }
+```
+
+Copy `agents/template.py`; keep implementation under `agents/` and declare one
+unique name. The runner scans top-level forecast modules, skips helpers,
+compatibility aliases and the template, and **rejects duplicate names**. The
+catalog in `agents/registry.py` records all 13 planned roles. Do not register a
+specialist twice under different aliases or copy its implementation into another
+student folder.
+
+The runner gives agents only CSV rows dated through `day`. Agents with separate
+release/receipt timestamps must additionally check availability at the actual
+forecast cutoff. Missing/invalid answers abstain and are excluded from scoring,
+weights and settlement. A genuine 0.5 is a valid neutral forecast. The runner
+clips valid probabilities to 0.05–0.95. If too few active agents can satisfy the
+20% direct influence cap, the current engine uses equal weights and records
+`cap_feasible=False` rather than claiming the cap held.
+
+Contrarian has `FORECAST_STAGE = "ensemble"`. It reads a frozen numeric
+`peer_forecasts` snapshot of same-day first-stage results; it never reads itself,
+other second-stage outputs, arguments or future outcomes. At least 80% must
+agree directionally and their mean must be at least 0.10 away from 0.5 before it
+opposes consensus. On News attacks, Contrarian is recomputed from attacked peer
+values without rerunning unaffected model calls. With dependent agents, a direct
+weight cap is not a bound on an attack's total causal effect.
+
+News/Mood/Betting remain explicitly registered adapters because they need models
+and a precise event definition. Import the common adapter from
+`agents.adapters`; its legacy `Student2Adapter` name is still supported. Existing
+`student2_*` snapshot keys and `--student2-inputs` remain the data protocol, not
+separate agent implementations. See their contract below.
+
+## Forecast and paper-trading replay
+
+```bash
+python experiments/run.py --start 2026-09-01 --end 2026-10-31 \
+  --data-dir data --agents-dir agents --paper --out outputs/team_replay_01
+```
+
+Supply real recorded prices and required specialist inputs. The runner needs a
+price after the final forecast day. Use a new output directory; the paper stage
+refuses to overwrite existing accounts. The default policy is BUY for
+`p_up >= 0.55`, SELL for `p_up <= 0.45`, otherwise HOLD. Change
+`--buy-threshold` and `--sell-threshold` equally for all methods if needed. These
+are demonstration thresholds, not optimized trading rules.
+
+Forecast D uses completed inputs through D; execution is at the following UTC
+day's **open**, with adverse slippage and fees. This abstracts computation/order
+latency; it does not guarantee an achievable real fill. With close-only data,
+explicitly use `--execution next_close`: execution is delayed until D+1's close,
+never the D close already used by the forecast. Missing daily price rows are
+rejected rather than silently filled.
+
+Each method/scenario owns an independent $10,000 account, persistent throughout
+that replay. Defaults are 0.10% fees, 0.05% slippage and a 25% BTC exposure cap.
+The runner's original forecast, coin, attack and score CSVs remain available.
+
+| Output | Meaning |
 | --- | --- |
-| `student4/data.py` | Stablecoin collection, validation, and snapshot JSON |
-| `student4/peg.py` | Signed, unrounded peg deviation in basis points |
-| `student4/agent.py` | Explained BUY/SELL/HOLD signal |
-| `student4/paper_trading.py` | Simulated BTC/USD account and trade/report exports |
-| `student4/__main__.py` | Offline demo and live collection commands |
-| `student4/fixtures/demo.json` | Clearly labelled synthetic demo scenario |
-| `tests/test_student4.py` | Offline verification |
+| `forecasts.csv` | Forecasts, participation and abstention reasons |
+| `coins.csv` | Influence weights, balances and cap feasibility |
+| `attack.csv`, `summary.csv` | Comparable forecast shifts and forecast scores |
+| `paper/clean/{exchange,vote,average}/trades.csv` | Simulated fills, fees, balances and realized profit |
+| The same folders' `risk_decisions.csv` | Requested/approved action, forecast availability, reason, execution time and exposure |
+| The same folders' `equity.csv`, `portfolio.json` | Daily marks and final account |
+| `paper/attacked/...` | Separate attacked portfolios when attack rows exist |
+| `paper/summary.csv`, `paper/run.json` | Portfolio comparison and run assumptions/provenance |
 
-The peg helper adapts `relativeBps` / `deriveDepegSignal` from the MIT-licensed
-[Pharos stablecoin risk project](https://github.com/TokenBrice/pharos-watch), pinned
-to [revision 8d554949ff7498e44d0f1a1e275d677fdbffd7b5](https://github.com/TokenBrice/pharos-watch/blob/8d554949ff7498e44d0f1a1e275d677fdbffd7b5/shared/lib/depeg-signals.ts).
-The Python adaptation uses decimal arithmetic and retains raw deviation and
-direction. Its licence is preserved in [licenses/pharos-MIT.txt](licenses/pharos-MIT.txt).
-Pharos's larger monitoring pipeline, thresholds, and confirmation logic are not
-included; our agent's thresholds are project-specific.
+Attacked portfolios use comparable attacked forecasts on attack dates and clean
+forecasts otherwise. Noncomparable/missing attacked results request HOLD and are
+marked missing. This uses the clean Exchange coin history: it is a local
+intervention study, not a separately settled poisoned economy. Plain fake-headline
+strings are not valid timestamped article injections for the model-backed News
+adapter. Noncomparable rows are not evidence of robustness.
 
-[Curvemetrics](https://github.com/xenophonlabs/curve-lp-metrics) was also reviewed.
-Its Curve-pool metrics, database, and Bayesian change-point models would require
-additional infrastructure beyond this week's module, so no code was imported.
-CoinGecko supplies live data through its documented API; no CoinGecko code is vendored.
+A replay starts fresh accounts. Exports do not automatically resume a live account
+or schedule a background service. A GUI has not been added; saved outputs form a
+consistent interface for one.
 
+## Data sources and timing
+
+Every CSV uses a `date` column that the runner indexes. Distinguish observation
+time, publication/receipt time and the forecast cutoff. Preserve provenance and
+revisions; downloading a historical value today does not prove it was known on an
+old forecast date. Demo data must stay explicitly labelled synthetic.
+
+### BTC prices
+
+`data/btc_prices.csv`: `date,open,close`, consecutive daily UTC candles. Close-only
+input is allowed only with explicit delayed next-close paper execution. Use the
+same provider and endpoint convention declared in model-backed contracts.
+
+Student 1's paginated collector saves the additional OHLC/volume/timestamp fields
+needed by the Chart and Long-term report loaders, while remaining compatible
+with the ensemble runner:
+
+```bash
+python -m market_data.bitcoin --start 2020-01-01 --end 2026-10-31 --output data/btc_prices.csv
+python -m agents.chart_report --interval 1d --history data/btc_prices.csv
+python -m agents.long_term_report --history data/btc_prices.csv --as-of 2026-10-31
+```
+
+The collector uses public Binance BTCUSDT Spot data, rejects unfinished days and
+gaps, and can round-trip the full daily CSV. The Chart report describes EMA,
+MACD, RSI, ATR, volume and taker-buy context; without `--history` its CLI retrieves
+recent completed candles (15m by default). Its model prompt/response validator
+does not connect an LLM provider automatically. Long-term fits log(price) against
+log(time since genesis), using only data through `--as-of`, with at least 365
+observations spanning two years. Its one-year line is an exploratory extrapolation,
+not a next-day prediction. BTCUSDT values are not a BTC/USD index; treating them
+as USD paper-account quotes is an explicit proxy assumption.
+
+The separate Student 1 installer is consolidated into the root `pyproject.toml`.
+Install the shared project from the repository root. Legacy `crypto_trading.*`
+imports and module commands still forward to the canonical implementations.
+
+### World economy and macro
+
+```bash
+python -m market_data.macro --start 2026-08-01 --end 2026-11-13
+```
+
+Yahoo `DX-Y.NYB` supplies DXY; `^TNX` supplies the 10-year Treasury yield in quoted
+percent units. Treasury yield is a market proxy, not the Fed policy rate. The
+collector writes `data/macro.csv` and raw snapshots in `data/macro_raw/`.
+
+Fields include `dxy`, `treasury_10y`, each series' `*_observed_on`,
+`*_available_at`, `*_forward_filled`, plus `source` and `availability_basis`.
+Completed session D is **assumed** available at D+1 00:00 UTC. This is not a Yahoo
+publication SLA or a verified vintage archive. Today's incomplete UTC date is
+rejected. Forward fill carries the last known value through weekends/holidays
+for at most four calendar days, retaining the actual source date; there is no
+backfill from future values. The agent compares five distinct source sessions,
+not five duplicated weekend rows. Include enough warmup history in the CSV.
+
+The heuristic is `p_up = 0.5 - 0.1*tanh(0.6*dollar_change_percent/1.0 +
+0.4*yield_change_percentage_points/0.25)`. Stronger dollar/rising yields are
+assumed headwinds. FRED/ALFRED vintages would support a different publication-time
+study; the Fed's H.10 dollar series releases prior-week observations on Mondays,
+so its daily labels do not imply zero publication lag.
+
+### Borrowing
+
+```bash
+python -m market_data.borrowing --start 2026-11-07 --end 2026-11-14
+```
+
+`data/borrowing.csv` needs `date,funding_rate,open_interest_usd,available_at,
+complete,source`. Funding is the daily mean **per-8-hour decimal** rate:
+0.0001 means 0.01% per settlement. OI is dollar notional, not BTC quantity; Binance
+USDT values are labelled USD proxies. Six consecutive completed days are needed,
+with the latest at most one calendar day old. Do not fill crypto-derivative
+weekend outages as if observations were recorded.
+
+The read-only Binance collector expects ordinary 00:00/08:00/16:00 UTC funding
+and a period-end OI observation within the final hour. It saves raw responses,
+marks incomplete days, and assigns actual receipt time as availability. The API
+has only about one month of OI history, so requests are limited to the last 25
+days. September/early-October replay needs a preexisting trusted archive. There
+are no keys, orders, automatic retries or TLS bypasses. A local smoke attempt
+failed certificate verification; a live feed is not claimed as verified.
+
+### ETF flows
+
+```bash
+python -m market_data.etf path/to/reviewed_flows.csv --units usd_millions
+```
+
+`data/etf_flows.csv` needs `date,net_flow_usd,available_at,complete,source`.
+Use complete **aggregate US spot-BTC ETF net creations/redemptions**, not share
+returns, trading volume or unadjusted AUM changes. The input amount column keeps
+its name even when `--units usd_millions` converts source amounts into dollars;
+use `--units usd` for dollar input. The importer validates types, timezones,
+source names and duplicate vintages. Preliminary/blank flows are not zeros.
+
+Farside's public totals are in US$ millions, but its evolving table does not
+establish historical first-publication timestamps. Import reviewed data with a
+preserved source/availability record rather than inventing a release time. The
+agent uses three reports within seven calendar days and carries published
+information through weekends/holidays for at most four days. It does not invent
+weekend flow entries. Later revisions may share `date` but need different
+`available_at`; only a vintage already available at the cutoff can be used.
+
+### Stablecoins
+
+```bash
+python -m market_data.stablecoin collect --output outputs/baseline.json
+python -m market_data.stablecoin collect --previous outputs/baseline.json --output outputs/current.json
+python -m market_data.stablecoin export-history outputs/nov06.json outputs/nov07.json --output data/stablecoin.csv
+```
+
+CoinGecko collects USDT, USDC and DAI prices, market cap, volume and provider times.
+The daily CSV contains `date,source,observed_at,available_at` and
+`{usdt,usdc,dai}_{price_usd,market_cap_usd,updated_at}`. The exporter uses actual
+collection time, rejects duplicate daily snapshots, and does not backdate newly
+downloaded historical values. Choose a snapshot from the last 15 minutes of each
+UTC day; provider quotes must be fresh. Comparable observations are approximately
+24 hours apart from the same source, with advancing provider timestamps.
+
+The daily adapter sums market cap/price as a price-adjusted supply proxy. It is
+not measured mint/burn or exchange inflow. Stable pegs support a smooth
+uncalibrated 0.40–0.60 forecast; a 0.5% peg warning suppresses the supply signal,
+and 2% stress gives 0.40. A single provider does not confirm a multi-source depeg.
+The standalone BUY/SELL/HOLD rules remain separately usable for component testing
+but are not a second ensemble vote.
+
+## Model-backed specialist contract
+
+The adapter lives at `agents/adapters.py`; News, Mood and Betting implementations
+live in `agents/specialists/`, with shared validated results in `agents/schemas.py`.
+Model clients are injected explicitly. Nothing in the runner creates a paid
+client automatically.
+
+```python
+from agents.adapters import SpecialistAdapter
+
+adapters = {
+    adapter.AGENT_NAME: adapter
+    for adapter in (
+        SpecialistAdapter("news", model_client=news_model),
+        SpecialistAdapter("mood", model_client=mood_model),
+        SpecialistAdapter("betting_odds", model_client=market_model),
+    )
+}
+# Pass adapters, saved day snapshots and settlement metadata into run(...).
+```
+
+For each day, the snapshot's `student2_forecast` explicitly declares:
+
+- `prediction_time` and `target_time`: aware timestamps exactly 24 hours apart,
+  with prediction UTC date matching the runner's day;
+- `price_source` and `reference_price_definition`: the actual provider and
+  endpoint convention for both prices;
+- `tie_definition: "down"`: an exact tie is not Up.
+
+Also provide the matching `student2_news_articles` / `student2_news_observed_at`,
+`student2_mood_readings` / `student2_mood_observed_at`, or
+`student2_market_observation` / `student2_markets_observed_at`. Observation times
+must be aware and no later than prediction; evidence must not be newer than its
+snapshot. Publication timestamps alone do not prove when contents were obtained
+or revised. News checks dated accepted evidence and model citations; undated
+articles can be excluded while preserving other valid articles. Betting may
+add explicit `student2_price_context` for Binance BTC/USDT spot.
+
+`run(...)` accepts `student2_adapters`, `student2_inputs` (date-to-snapshot mapping)
+and `settlement_contract`. The latter declares `price_source`,
+`reference_price_definition`, `tie_definition: "down"`, and `close_times` mapping
+CSV dates to actual aware close timestamps. The runner verifies both endpoints,
+24-hour duration, source and tie rule against the CSV metadata. These declarations
+must be true of the data, not labels invented to make mismatched prices fit.
+
+`--student2-inputs bundle.json` loads `days` and `settlement` and registers the
+three offline adapters. **Without injected clients, this CLI alone does not
+produce model-backed forecasts.** Only `student2_*` snapshot keys are overlaid;
+they cannot replace the price tables. Insufficient inputs abstain with null
+probability. All-abstain days have blank scores, no active weights and unchanged
+agent coins. A real 0.5 remains a forecast. Unstructured `fake_headline` text is
+rejected until supplied as properly timestamped article evidence.
+
+## Prediction-market evidence and live tools
+
+Canonical data tools live in `market_data/prediction_markets/`. A market's YES
+payout midpoint is **not automatically** the probability of the team's different
+next-24-hour event. Split payouts imply an idealized expected payout involving
+tie probability, and real spreads add further differences. Do not invent an
+unknown tie probability or convert intervals mechanically.
+
+```bash
+python -m market_data.prediction_markets.limitless_live
+# Select a known supported daily market if needed:
+python -m market_data.prediction_markets.limitless_live --slug EXACT_SLUG
+```
+
+The live reader requires a subsequent increasing-version streamed full-book
+snapshot after the initial snapshot, a recent provider event timestamp, valid
+outcome mapping and nonempty two-sided depth. Midpoint, depth and timestamp must
+come from the same accepted frame. Sequence/time reversal fails. It saves raw
+market, book, quote summary and statuses; it does not create a wallet or order.
+REST listing receipt time is not quote freshness. Missing/unsupported markets,
+quiet streams and provider errors are legitimate unsuccessful outcomes.
+
+Discovery is bounded: the full reader allows 30 seconds/up to 20 listing pages
+with 10-second per-request limits; one stream attempt has a configured 20-second
+wait plus underlying connection timeouts. There are no automatic retries. The
+optional price-context demo uses a separate bounded three-page targeted search
+and detail validation, not an exhaustive discovery claim.
+
+Preserved Windows helpers:
+
+```powershell
+powershell -NoProfile -File .\student2\verification\collect_limitless_markets.ps1 -OutputPath .\outputs\limitless-listing.json
+python -m market_data.prediction_markets.limitless_live --listing-file outputs/limitless-listing.json
+python -m student2.verification.run_market_price_demo
+```
+
+Choose new listing filenames; provenance is caller-attested, not independently
+authenticated. The targeted discovery's packaged PowerShell helper remains under
+`student2/verification/get_limitless_public.ps1` so installed and existing
+Windows workflows resolve the same file. Optional strict contract flags must be
+supplied together; they do not alter the market's actual rules.
+
+A validated book can become evidence for an explicitly supplied model estimate
+through the adapter; the quote itself stays separate from the team's probability.
+Unavailable/mismatched evidence or model access abstains. Previous saved Limitless
+examples are not proof of successful current live book capture or calibrated
+forecasting. Offline transport tests use mocks, not live execution.
+
+## Risk and execution rules
+
+`execution/paper_trading.py` owns account math; `risk/gateway.py` owns the mandatory
+position limit. New code should execute through:
+
+```python
+from execution.paper_trading import PaperTrader
+from risk.gateway import execute_guarded
+
+trader = PaperTrader(initial_cash="10000", fee_rate="0.001", slippage_bps="5")
+# Reuse this account across cycles; final_action comes from the ensemble policy.
+decision, trade = execute_guarded(trader, final_action, btc_price_usd)
+```
+
+The invariant at each checked execution quote is BTC market value <= 25% of
+post-cost portfolio equity. BUY sizing includes existing holdings, fees and
+slippage; quantities/fractions round down. Repeated buys cannot bypass the cap.
+`buy_fraction` is a fraction of cash, not an exposure limit or maximum-loss rule.
+
+SELL closes all BTC. If appreciation already made BTC overweight, the gateway
+can change HOLD/BUY to full SELL because the current simulator lacks partial
+sales. The cap is checked when execution is evaluated, not continuously between
+price ticks; daily equity outputs flag drift above it. Direct simulator calls
+bypass risk approval and belong only in isolated component tests.
+
+The optional `execution/quality.py` wrapper additionally checks a timestamped
+bid/ask and executable BTC ask depth at or below the adverse fill price. Quotes
+must be no more than 30 seconds old. Missing/insufficient depth or excessive spread
+defers BUY without mutating balances. Required liquidation is never blocked.
+This gate does not fetch books or model partial fills. OHLC replay does not enable
+it without archived book quotes or invent historical liquidity.
+
+Accounting uses Decimal, whole-satoshi quantities, buy fees in cost basis and
+sell fees deducted from proceeds. Equity marks BTC at the supplied price without
+hypothetical liquidation costs. There is no leverage, shorting or exchange order;
+cash is simulated fiat USD and is not revalued with stablecoin pegs.
+
+## Tests and compatibility
+
+```bash
+# Full offline suite after installing specialists, live and test extras
+python -m pytest -q
+
+# Core pipeline plus the newly integrated stablecoin tests
+python -m pytest tests/test_new_specialists.py tests/test_paper_pipeline.py \
+  tests/test_runner_abstentions.py tests/test_student5_gateway.py \
+  tests/test_student5_macro.py tests/test_engine.py tests/test_student4.py \
+  tests/test_student4_integration.py tests/test_project_layout.py -q
+```
+
+Compatibility files forward to the same canonical module object, including
+private helpers, classes and monkeypatch targets. They contain no second agent
+algorithm. Existing imports and `python -m student4 ...`,
+`python -m macro.collect ...`, and legacy Student 2 module CLIs keep working.
+For new code use the canonical paths in the map above. Keep archived JSON evidence
+and third-party license files; moving documentation is not permission to rewrite
+historical results.
+
+The preserved fresh-wheel Windows verifier is
+`student2/verification/verify_fresh_environment.ps1`. It checks installed package
+imports/helpers and runs checkout-based offline tests. Ordinary tests do not
+validate live API credentials or forecast accuracy.
+
+Verification after the live-dashboard and 13-interface integration on 15 November 2026:
+**439 tests and 127 subtests passed**, including the Student 1 suite;
+six PowerShell-only tests were skipped because PowerShell is unavailable on this
+machine. Session-key privacy, local HTTP authorization, input clearing/form safeguards,
+Gemini key injection and bounded chart payloads are covered by the test suite.
+The redesigned interface was checked with real candles, price/volume overlays,
+chart ranges, agent filters/search and evidence dialogs.
+
+The live integration produced a forecast from eight agents using retrieved Binance,
+Coin Metrics and Yahoo inputs; five roles abstained with unmet input/model requirements.
+A 60-day real BTC price-only replay and the guarded paper-decision UI were verified.
+The updated wheel built from a fresh temporary source staging directory, and new
+modules, the 13-role catalog and packaged dashboard HTML imported successfully
+outside the checkout. No Gemini inference was verified without a local key.
+
+The earlier organization wheel built successfully, and isolated installed imports and packaged
+helpers were verified outside the checkout. Both the stablecoin component demo
+and the new-specialist paper replay completed using labelled synthetic data.
+
+## Schedule and responsibilities
+
+Planning window: **14 September–24 November 2026**, assuming submission on
+24 November. The chart is an editable planning baseline, not evidence that tasks
+were completed on those dates. Confirm actual dates and status with the team.
+
+```mermaid
+gantt
+    title Bitcoin Agent Exchange schedule from 14 September to 24 November 2026
+    dateFormat YYYY-MM-DD
+    axisFormat %d %b
+    section Research and planning
+    Problem definition and scope                 :scope, 2026-09-14, 2026-09-28
+    Literature and TradingAgents review           :literature, 2026-09-21, 2026-10-12
+    Baseline debate experiments                   :debate_research, 2026-10-05, 2026-10-26
+    Proposal and architecture agreement           :proposal, 2026-10-19, 2026-11-02
+    section Shared implementation
+    Agent contract and archived data              :contract, 2026-10-26, 2026-11-09
+    First six agents and Exchange engine          :six, 2026-11-02, 2026-11-13
+    Connect six agent demo                        :demo, 2026-11-12, 2026-11-16
+    Remaining specialists and debate baseline     :remaining, 2026-11-14, 2026-11-19
+    section Macro and risk
+    Macro source and availability policy          :macro_policy, 2026-11-14, 2026-11-15
+    World economy agent and macro history         :macro, 2026-11-14, 2026-11-17
+    Risk gateway and execution tests              :gateway, 2026-11-14, 2026-11-17
+    Contrarian and circuit breaker                :risk_more, 2026-11-16, 2026-11-19
+    Security analysis and contribution evidence   :security, 2026-11-17, 2026-11-22
+    section Validation and submission
+    Full clean replay and integration checks      :clean, 2026-11-18, 2026-11-20
+    Repeated attack replay and comparisons        :attacks, 2026-11-19, 2026-11-22
+    Statistics and results review                 :stats, 2026-11-21, 2026-11-23
+    Report preparation                            :report, 2026-11-14, 2026-11-24
+    Final demo rehearsal and submission checks    :rehearsal, 2026-11-23, 2026-11-24
+    Submission                                   :milestone, submit, 2026-11-24, 0d
+```
+
+
+Edit the canonical implementation on your own branch, fetch recent work before
+merging, and retain one registration per specialist. Update this README whenever
+locations, commands or interfaces change. The earlier 30 November proposal must
+be reconciled with the assumed 24 November submission deadline.
+
+## Saved examples and provenance
+
+Historical examples remain in `student2/examples/`: the Mood run from
+9 November, News probe from 11 November, and paired fake-headline example under
+`news_specialist_fake_headline_20261110/`. The latter records an older
+7–8 November prediction window and a synthetic injected headline. These are saved
+references, not fresh forecasts or proof of general robustness. Fixture manifests
+retain synthetic provenance without leaking experimental labels into the model
+prompt.
+
+The initial proposal reports earlier debate experiments; those reports do not
+substitute for a complete current replay. Synthetic demo outcomes, one paired
+attack and a successful data download must not be described as final research
+results. Full-day evidence persistence beyond the runner's probability CSVs needs
+care; the sample new-agent demo saves its complete agent evidence explicitly.
+
+## Remaining work
+
+- Verify Betting odds with a validated fresh book and a complete model-result
+  path. The Gemini bridge returns JSON text; the market-evidence validator needs
+  a parsed object or explicit JSON validation at that adapter boundary.
+- Live dashboard forecasts currently start with equal initial coins. Demonstrate
+  learning using settled replay outcomes, or implement durable live settlement
+  before claiming cross-run live learning. With a 20% influence cap, at least
+  six active agents are needed to demonstrate unequal capped weights.
+- Configure Gemini locally and validate actual News/Mood/debate responses; no
+  key was present during implementation. Mock tests do not validate model quality.
+- Supply reviewed timestamped ETF-flow reports, a valid fresh prediction-market
+  book, and a CoinGecko key plus comparable snapshots approximately 24 hours apart.
+- Archive point-in-time evidence prospectively. Downloaded historical prices and
+  metrics cannot reconstruct historical article availability or revised vintages.
+- Calibrate/evaluate the new heuristics on held-out data. A rolling intraday 24h
+  target differs from the daily-close replay target and needs its own evaluation.
+- Run the planned real-data period and repeated paired attacks, then report
+  completed outcomes, position changes, uncertainty and measured model usage.
+  The existing bare-headline replay cannot replace timestamped News experiments.
+  Hidden-prompt, whale and memory-poisoning studies remain experimental work;
+  no memory-poisoning result should be claimed without a memory subsystem.
+- Finalize the report, individual contribution evidence and presentation.
+  Recruiter remains optional for SDP 1.
+
+## Attribution
+
+Preserve the project `LICENSE` and `licenses/pharos-MIT.txt`. The stablecoin peg
+helper adapts `relativeBps`/`deriveDepegSignal` from
+[Pharos](https://github.com/TokenBrice/pharos-watch), revision
+`8d554949ff7498e44d0f1a1e275d677fdbffd7b5`, with Decimal arithmetic. Pharos's broader
+monitoring pipeline and confirmation logic were not imported. Curvemetrics was
+reviewed but no code was imported. Provider APIs supply observations, not vendored
+provider code.
+
+Implementation references: [Yahoo delays](https://help.yahoo.com/kb/finance/article-exchanges-data-delays-sln2310.html),
+[Federal Reserve H.10](https://www.federalreserve.gov/releases/h10/),
+[FRED vintage periods](https://fred.stlouisfed.org/docs/api/fred/realtime_period.html),
+[Binance market data](https://developers.binance.com/en/docs/catalog/core-trading-derivatives-trading-usd-s-m-futures/api/rest-api/market-data),
+[Farside ETF totals](https://farside.co.uk/BTC/),
+[Coin Metrics community API](https://github.com/coinmetrics/docs-website/blob/master/api.md),
+[Gemini models](https://ai.google.dev/gemini-api/docs/models), and
+[Limitless market-data documentation](https://docs.limitless.exchange/developers/websocket/market-data).

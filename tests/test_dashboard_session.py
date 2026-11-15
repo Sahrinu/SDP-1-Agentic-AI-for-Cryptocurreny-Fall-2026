@@ -1,0 +1,185 @@
+"""Credentials stay in memory; local HTTP controls never echo or persist keys."""
+import io
+import json
+import re
+from pathlib import Path
+import pytest
+
+from dashboard.credentials import SessionCredentials, parse_key_payload
+from dashboard.__main__ import create_server
+from dashboard.service import market_snapshot
+
+TEST_KEY='unit-test-session-value-not-a-real-key'
+
+@pytest.fixture
+def clean_env(monkeypatch):
+    monkeypatch.delenv('GOOGLE_API_KEY',raising=False)
+    monkeypatch.delenv('GEMINI_API_KEY',raising=False)
+
+@pytest.fixture
+def local_http(tmp_path,clean_env):
+    server=create_server(8765,root=tmp_path,bind=False)
+    server.server_port=8765
+    class Connection:
+        def __init__(self,raw):self.raw=raw;self.response=bytearray()
+        def makefile(self,*args,**kwargs):return io.BytesIO(self.raw)
+        def sendall(self,data):self.response.extend(data)
+        def settimeout(self,value):pass
+    def call(method,path,body=b'',headers=None):
+        h={'Host':'127.0.0.1:8765','Content-Length':str(len(body)),**(headers or {})}
+        raw=(method+' '+path+' HTTP/1.0\r\n'+''.join(k+': '+v+'\r\n' for k,v in h.items())+'\r\n').encode()+body
+        conn=Connection(raw)
+        server.RequestHandlerClass(conn,('127.0.0.1',1),server)
+        head,payload=bytes(conn.response).split(b'\r\n\r\n',1)
+        return int(head.split()[1]),payload,head
+    _,html,_=call('GET','/')
+    token=re.search(rb'name="demo-token" content="([^"]+)"',html).group(1).decode()
+    call.token=token
+    call.root=tmp_path
+    yield call
+    server.server_close()
+
+
+def test_session_overrides_environment_and_clears_without_mutating_it(monkeypatch,clean_env):
+    monkeypatch.setenv('GOOGLE_API_KEY','environment-test-only')
+    credentials=SessionCredentials()
+    assert credentials.resolved_key()=='environment-test-only'
+    credentials.set_key(TEST_KEY)
+    assert credentials.resolved_key()==TEST_KEY
+    assert TEST_KEY not in repr(credentials)
+    public=json.dumps(credentials.public_status())
+    assert TEST_KEY not in public and 'session' in public
+    assert SessionCredentials().resolved_key()=='environment-test-only'
+    credentials.clear()
+    assert credentials.resolved_key()=='environment-test-only'
+    assert credentials.public_status()['source']=='environment'
+
+@pytest.mark.parametrize('payload',[b'bad json',b'[]',b'{}',b'{"api_key": 1}',b'{"api_key": ""}',
+    b'{"api_key": "key with spaces"}',b'{"api_key":"abc", "extra":"x"}',
+    json.dumps({'api_key':'x'*4097}).encode(),b'{"api_key":"line\\nfeed"}'])
+def test_invalid_key_payloads_are_rejected_without_echo(payload):
+    with pytest.raises(ValueError) as error:parse_key_payload(payload)
+    assert TEST_KEY not in str(error.value)
+
+
+def test_session_http_set_clear_and_no_key_leak_or_file_write(local_http):
+    call=local_http
+    code,raw,_=call('POST','/api/gemini',json.dumps({'api_key':TEST_KEY}).encode(),{'X-Demo-Token':call.token})
+    assert code==200 and TEST_KEY.encode() not in raw
+    assert json.loads(raw)['gemini']['source']=='session'
+    code,raw,headers=call('GET','/api/state')
+    assert code==200 and json.loads(raw)['gemini_configured']
+    assert TEST_KEY.encode() not in raw and b'no-store' in headers
+    for route in ('/','/app.js','/styles.css','/api/market'):
+        code,raw,_=call('GET',route)
+        assert code==200 and TEST_KEY.encode() not in raw
+    for file in call.root.rglob('*'):
+        if file.is_file():assert TEST_KEY.encode() not in file.read_bytes()
+    code,raw,_=call('POST','/api/gemini/clear',headers={'X-Demo-Token':call.token})
+    assert code==200 and not json.loads(raw)['gemini']['configured']
+
+@pytest.mark.parametrize('headers',[{}, {'X-Demo-Token':'wrong'},
+    {'X-Demo-Token':'TOKEN','Origin':'https://untrusted.example'},
+    {'X-Demo-Token':'TOKEN','Host':'untrusted.example:8765'}])
+def test_credential_route_rejects_cross_origin_or_unauthorized_requests(local_http,headers):
+    headers={k:v.replace('TOKEN',local_http.token) for k,v in headers.items()}
+    code,raw,_=local_http('POST','/api/gemini',json.dumps({'api_key':TEST_KEY}).encode(),headers)
+    assert code==403 and TEST_KEY.encode() not in raw
+    _,state,_=local_http('GET','/api/state')
+    assert not json.loads(state)['gemini_configured']
+
+@pytest.mark.parametrize('body,headers',[(b'bad json',{}),(b'{}',{}),(b'',{'Content-Length':'99999'}),
+    (b'',{'Content-Length':'abc'}),(b'{}',{'Transfer-Encoding':'chunked'})])
+def test_bad_http_body_never_updates_configuration(local_http,body,headers):
+    code,raw,_=local_http('POST','/api/gemini',body,{'X-Demo-Token':local_http.token,**headers})
+    assert code==400
+    _,state,_=local_http('GET','/api/state')
+    assert not json.loads(state)['gemini_configured']
+
+
+def test_static_assets_and_traversal_guard(local_http):
+    for route,mime in [('/app.js',b'text/javascript'),('/styles.css',b'text/css')]:
+        code,body,headers=local_http('GET',route)
+        assert code==200 and body and mime in headers
+        assert b"script-src 'self';" in headers
+        assert b"form-action 'none'" in headers
+    assert local_http('GET','/../.env')[0]==404
+    assert local_http('GET','/api/gemini')[0]==404
+    assert local_http('GET','/api/state',headers={'Host':'untrusted.example'})[0]==403
+
+
+def test_explicit_key_is_passed_to_gemini_without_touching_environment(monkeypatch,clean_env):
+    from google import genai
+    from model_clients.demo_gemini import DemoGemini
+    import os
+    captured={}
+    def constructor(**kwargs):captured.update(kwargs);return object()
+    monkeypatch.setattr(genai,'Client',constructor)
+    client=DemoGemini(api_key=TEST_KEY)
+    assert captured['api_key']==TEST_KEY
+    assert client.usage==[]
+    assert 'GOOGLE_API_KEY' not in os.environ and 'GEMINI_API_KEY' not in os.environ
+
+
+def test_chart_payload_has_only_actual_collected_ohlcv():
+    import pandas as pd
+    frame=pd.DataFrame({'open':[100.], 'high':[105.], 'low':[98.], 'close':[102.], 'volume':[24.]},
+        index=pd.to_datetime(['2026-11-14'],utc=True))
+    data=market_snapshot({'btc_prices':frame},{'btc_prices':{'received_at':'2026-11-15T10:00:00Z'}})
+    assert data['candles']==[{'date':'2026-11-14','open':100.,'close':102.,'high':105.,'low':98.,'volume':24.}]
+    frame=frame.drop(columns=['volume','high','low'])
+    assert 'volume' not in market_snapshot({'btc_prices':frame},{})['candles'][0]
+    assert market_snapshot({}, {})['candles']==[]
+
+
+def test_key_form_has_no_url_submission_fallback(local_http):
+    _,html,_=local_http('GET','/')
+    assert b'<form id="key-form" method="dialog" autocomplete="off">' in html
+    _,script,_=local_http('GET','/app.js')
+    assert b'localStorage' not in script and b'sessionStorage' not in script
+
+
+def test_http_progress_is_visible_before_the_forecast_finishes(local_http,monkeypatch):
+    import threading
+    import time
+    import dashboard.__main__ as server_module
+    import market_data.live as live
+    from agents.registry import CATALOG
+    entered,release=threading.Event(),threading.Event()
+    monkeypatch.setattr(live,'reference_quote',lambda:{'source':'unit-test-only'})
+    def forecast(data,quote,*,client,on_progress):
+        for index,spec in enumerate(CATALOG):
+            on_progress({'event':'agent_started','role':spec.name})
+            if index==0:
+                entered.set()
+                assert release.wait(timeout=5)
+            result={'agent':spec.name,'role':spec.name,'day':'2026-11-15','p_up':.6,
+                'data_missing':False,'evidence':['synthetic unit test only'],'audit':{'passed':True}}
+            on_progress({'event':'agent_completed','role':spec.name,'status':'forecasted','result':result})
+        on_progress({'event':'aggregation_started'})
+        methods={'exchange':.6,'vote':1.,'average':.6}
+        on_progress({'event':'aggregation_completed','methods':methods})
+        return {'id':'unit-test-forecast','methods':methods}
+    monkeypatch.setattr(server_module,'forecast_snapshot',forecast)
+    code,_,_=local_http('POST','/api/forecast',headers={'X-Demo-Token':local_http.token})
+    assert code==202
+    try:
+        assert entered.wait(timeout=5)
+        _,payload,_=local_http('GET','/api/state')
+        state=json.loads(payload)
+        assert state['busy'] and state['forecast'] is None
+        assert state['activity']['current_agent']=='Chart'
+        assert state['activity']['agents'][0]['status']=='running'
+        assert state['activity']['evaluated_count']==0
+    finally:
+        release.set()
+    deadline=time.monotonic()+5
+    while time.monotonic()<deadline:
+        _,payload,_=local_http('GET','/api/state')
+        state=json.loads(payload)
+        if not state['busy']:break
+        time.sleep(.005)
+    assert not state['busy'] and state['activity']['status']=='completed'
+    assert state['activity']['evaluated_count']==13
+    saved=json.loads((local_http.root/'outputs/dashboard/forecasts/unit-test-forecast.json').read_text())
+    assert saved['activity']['status']=='completed' and saved['activity']['evaluated_count']==13

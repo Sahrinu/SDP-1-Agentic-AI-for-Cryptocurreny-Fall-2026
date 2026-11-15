@@ -9,10 +9,10 @@ import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from agents.world_econompy import forecast
-from macro.collect import align_daily
+from agents.world_economy import forecast
+from market_data.macro import align_daily
 from risk.gateway import execute_guarded
-from student4.paper_trading import PaperTrader
+from execution.paper_trading import PaperTrader
 
 
 def main():

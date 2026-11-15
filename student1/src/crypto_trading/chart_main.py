@@ -1,29 +1,9 @@
-"""Student 1 Chart-agent command."""
-
-import argparse
-import json
-from pathlib import Path
-
-from crypto_trading.agents.chart import analyze_chart
-from crypto_trading.config import MarketConfig
-from crypto_trading.data.binance import fetch_completed_candles
-from crypto_trading.data.bitcoin_prices import load_daily_history
-
-
-def main() -> None:
-    parser = argparse.ArgumentParser(description="Analyze completed BTCUSDT Spot candles")
-    parser.add_argument("--interval", default="15m")
-    parser.add_argument("--history", type=Path, help="Use saved daily CSV instead of current Binance candles")
-    args = parser.parse_args()
-    if args.history:
-        if args.interval != "1d":
-            parser.error("--history requires --interval 1d")
-        candles = load_daily_history(args.history)
-    else:
-        candles = fetch_completed_candles(MarketConfig(interval=args.interval))
-    report = analyze_chart(candles, interval=args.interval)
-    print(json.dumps(report.to_dict(), indent=2))
-
-
+"""Compatibility import; edit agents/chart_report.py instead."""
+import importlib as _importlib
+import sys as _sys
+_implementation = _importlib.import_module("agents.chart_report")
 if __name__ == "__main__":
-    main()
+    if hasattr(_implementation, "main"):
+        raise SystemExit(_implementation.main())
+else:
+    _sys.modules[__name__] = _implementation

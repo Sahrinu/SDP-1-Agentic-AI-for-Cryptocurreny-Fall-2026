@@ -18,12 +18,12 @@ def main():
         if not (os.environ.get('GOOGLE_API_KEY') or os.environ.get('GEMINI_API_KEY')):
             p.error('No Gemini key loaded; no collection or model call made')
     sys.path.insert(0, str(root))
-    from student2.agents.limitless_targeted_discovery import DiscoveryRequestError, discover
-    from student2.agents.limitless_live import observe_market
-    from student2.agents.binance_raw_context import assemble
-    from student2.agents import market_evidence_specialist as model
-    from student2.agents import market_evidence_with_prices as enriched
-    from student2.integration_adapter import Student2Adapter
+    from market_data.prediction_markets.limitless_targeted_discovery import DiscoveryRequestError, discover
+    from market_data.prediction_markets.limitless_live import observe_market
+    from market_data.prediction_markets.binance_raw_context import assemble
+    from agents.specialists import market_evidence_specialist as model
+    from agents.specialists import market_evidence_with_prices as enriched
+    from agents.adapters import Student2Adapter
     folder=root/'runs'/'price_context_demo'/uuid.uuid4().hex;folder.mkdir(parents=True)
     def ps(script,*args):subprocess.run(['powershell','-NoProfile','-ExecutionPolicy','Bypass','-File',str(root/script),*map(str,args)],cwd=root,check=True)
     try:
