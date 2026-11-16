@@ -7,7 +7,7 @@ def main():
     p=argparse.ArgumentParser(description=__doc__)
     p.add_argument('--env-file',type=Path)
     p.add_argument('--model');p.add_argument('--live',action='store_true')
-    a=p.parse_args();root=Path(__file__).resolve().parents[2]
+    a=p.parse_args();root=Path(__file__).resolve().parents[1]
     if a.live and not a.model:p.error('--live requires --model')
     if a.live:
         if a.env_file:
@@ -38,7 +38,7 @@ def main():
         if report.get('observation_status')!='book_observed':
             raise RuntimeError('No validated live market book')
         raw_manifest=folder/'binance_raw_manifest.json'
-        ps('student2/verification/collect_binance_context.ps1','-Observation',observation,'-OutputPath',raw_manifest)
+        ps('verification/collect_binance_context.ps1','-Observation',observation,'-OutputPath',raw_manifest)
         context=folder/'price_context.json'
         assembled=assemble(raw_manifest)
         with context.open('x',encoding='utf-8') as output:

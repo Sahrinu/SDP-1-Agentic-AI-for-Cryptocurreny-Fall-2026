@@ -10,7 +10,8 @@ from agents.specialists.betting_odds_specialist import _datetime, _rules
 
 MAX_PAGES = 5
 PAGE_SIZE = 25
-SCRIPT = Path(__file__).resolve().parents[2] / 'student2' / 'verification' / 'get_limitless_public.ps1'
+from importlib.resources import files
+SCRIPT = Path(str(files('verification').joinpath('get_limitless_public.ps1')))
 
 
 class DiscoveryRequestError(RuntimeError):

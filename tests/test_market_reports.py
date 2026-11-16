@@ -2,9 +2,9 @@ import json
 import unittest
 from decimal import Decimal
 
-from crypto_trading.agents.market import analyze_market
-from crypto_trading.agents.market_llm import build_market_prompt, parse_market_interpretation
-from crypto_trading.data.binance import Candle, parse_candles
+from agents.specialists.market import analyze_market
+from agents.specialists.market_llm import build_market_prompt, parse_market_interpretation
+from market_data.bitcoin.binance import Candle, parse_candles
 
 
 class MarketTests(unittest.TestCase):
@@ -67,7 +67,7 @@ class MarketTests(unittest.TestCase):
     def test_rsi_does_not_gate_macd_momentum(self):
         from dataclasses import replace
         from unittest.mock import patch
-        from crypto_trading.features.technical import MarketFeatures
+        from features.technical import MarketFeatures
 
         candles = [Candle(0, 999, Decimal(100), Decimal(101), Decimal(99),
                           Decimal(100), Decimal(10), Decimal(1000), 20,
@@ -75,9 +75,9 @@ class MarketTests(unittest.TestCase):
         features = MarketFeatures(close=100, ema20=99, ema50=98, rsi14=40,
                                   macd=2, macd_signal=1, atr14=1, atr_pct=1,
                                   volume_ratio20=1, taker_buy_share=0.5)
-        with patch("crypto_trading.agents.market.calculate_features", return_value=features):
+        with patch("agents.specialists.market.calculate_features", return_value=features):
             low_rsi = analyze_market(candles, symbol="BTCUSDT", interval="15m")
-        with patch("crypto_trading.agents.market.calculate_features",
+        with patch("agents.specialists.market.calculate_features",
                    return_value=replace(features, rsi14=70)):
             high_rsi = analyze_market(candles, symbol="BTCUSDT", interval="15m")
         self.assertEqual(low_rsi.momentum, "positive")

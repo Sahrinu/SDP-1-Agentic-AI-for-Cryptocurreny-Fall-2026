@@ -6,10 +6,10 @@ from decimal import Decimal
 from pathlib import Path
 from unittest.mock import patch
 
-from crypto_trading.agents.chart import analyze_chart
-from crypto_trading.agents.long_term import analyze_long_term
-from crypto_trading.data.binance import Candle
-from crypto_trading.data.bitcoin_prices import (DAY_MS, fetch_daily_history,
+from agents.specialists.chart import analyze_chart
+from agents.specialists.long_term import analyze_long_term
+from market_data.bitcoin.binance import Candle
+from market_data.bitcoin.history import (DAY_MS, fetch_daily_history,
                                                load_daily_history, save_daily_history)
 
 
@@ -33,7 +33,7 @@ class StudentOneTests(unittest.TestCase):
         source = [candle(start + timedelta(days=i), 40000 + i) for i in range(3)]
         pages = [io.BytesIO(json.dumps([api_row(c) for c in source[:2]]).encode()),
                  io.BytesIO(json.dumps([api_row(source[2])]).encode())]
-        with patch("crypto_trading.data.bitcoin_prices.urlopen", side_effect=pages) as request:
+        with patch("market_data.bitcoin.history.urlopen", side_effect=pages) as request:
             result = fetch_daily_history(start, start + timedelta(days=2), today=date(2024, 1, 5))
         self.assertEqual(request.call_count, 2)
         self.assertEqual(result, source)
@@ -49,7 +49,7 @@ class StudentOneTests(unittest.TestCase):
             fetch_daily_history(date(2024, 1, 1), date(2024, 1, 5), today=date(2024, 1, 5))
         start = date(2024, 1, 1)
         rows = [api_row(candle(start, 40000)), api_row(candle(start + timedelta(days=2), 40002))]
-        with patch("crypto_trading.data.bitcoin_prices.urlopen",
+        with patch("market_data.bitcoin.history.urlopen",
                    return_value=io.BytesIO(json.dumps(rows).encode())):
             with self.assertRaisesRegex(ValueError, "gap"):
                 fetch_daily_history(start, start + timedelta(days=2), today=date(2024, 1, 5))

@@ -15,8 +15,11 @@ The bundled workflow replay remains synthetic and is not a research result.
 
 This is the project's **single documentation guide**. All paths below are relative
 to the repository root. Change an implementation at its canonical location;
-`student1/`, `student2/`, `student4/`, `crypto_trading/`, `macro/` and `tradingagents/` retain compatibility imports,
-historical artifacts or verification helpers, not competing agent implementations.
+the student-specific source directories have been removed from the root.
+`compat/` contains only old package names and forwarding entry points. It keeps
+teammates' older imports working after installation; it is not a second agent
+system. Tests, scripts, fixtures and saved evidence live in the shared locations
+listed below. Git history preserves earlier contributions.
 
 ## Contents
 
@@ -71,8 +74,9 @@ configuration. Explicitly inject the chosen model client into replay adapters.
 Use the configured environment rather than depending on an unrelated sibling
 TradingAgents checkout. No credentials are needed for the offline demos or tests.
 
-Old installation extras and requirements files remain compatibility entry points;
-new setup instructions belong here, not in student-specific README files.
+Old installation extra names remain accepted for compatibility. The redundant
+legacy betting-client requirements file was removed; use the shared `[live]`
+extra. All setup instructions live here.
 
 ## Quick demonstrations
 
@@ -235,6 +239,22 @@ specialists; `experiments/debate.py` implements the separate debate baseline.
 `risk/auditor.py` and `risk/circuit_breaker.py` contain the added validators.
 
 
+```text
+dashboard/        Web interface and observable forecast execution
+agents/           One roster and the real specialist implementations
+market_data/      Provider collectors, input validation and packaged fixtures
+exchange/         Agent coins, weights and ensemble methods
+risk/             Evidence checks, circuit breaker and 25% exposure cap
+execution/        Paper account and execution accounting
+experiments/      Replay, debate and evaluation
+features/         Shared calculations
+model_clients/    Provider clients
+verification/     Collection scripts and installation checks
+examples/         Runnable demos and reference_runs/ archived evidence
+tests/            All shared tests and test fixtures
+compat/           Old import names that forward to shared implementations
+```
+
 | Canonical location | Responsibility | Important files |
 | --- | --- | --- |
 | `agents/` | Agent interface, roster, adapters and daily forecasts | `registry.py`, `adapters.py`, `schemas.py`, `template.py` |
@@ -253,10 +273,11 @@ specialists; `experiments/debate.py` implements the separate debate baseline.
 | `tests/` | Offline tests and clearly labelled fixtures | `fake_agents/` are test agents, not research specialists |
 | `data/` | User-supplied point-in-time CSVs and downloaded local data | See the data contracts below |
 | `outputs/` | Generated results, raw snapshots and demonstrations | Ignored by Git |
-| `student2/examples/` | Previously saved historical evidence | Preserved unchanged; not current live outputs |
-| `student2/verification/` | Packaged PowerShell transports and installation checks | Preserved so existing workflows keep working |
-| `student4/fixtures/` | Legacy stablecoin demo scenario | Synthetic packaged fixture |
-| `student2/`, `student4/`, `macro/`, `tradingagents/` | Compatibility modules | Forward imports to canonical implementations |
+| `examples/reference_runs/` | Previously saved historical evidence | Preserved unchanged; not current live outputs |
+| `verification/` | Shared PowerShell transports and installation checks | `verify_installed.py`, `verify_fresh_environment.ps1`, `run_market_price_demo.py` |
+| `market_data/stablecoin/fixtures/` | Stablecoin demo input | Synthetic packaged fixture |
+| `market_data/prediction_markets/fixtures/` | Saved market response for verification | Historical example; not a current live quote |
+| `compat/` | Legacy import aliases only | `student2`, `student4`, `crypto_trading`, `macro`, `tradingagents`; do not implement agents here |
 | `licenses/`, `LICENSE` | Third-party and project licensing | Preserve when moving or reusing code |
 
 The old `world_econompy.py` spelling is an import alias for
@@ -417,7 +438,7 @@ observations spanning two years. Its one-year line is an exploratory extrapolati
 not a next-day prediction. BTCUSDT values are not a BTC/USD index; treating them
 as USD paper-account quotes is an explicit proxy assumption.
 
-The separate Student 1 installer is consolidated into the root `pyproject.toml`.
+The separate student installer is consolidated into the root `pyproject.toml`.
 Install the shared project from the repository root. Legacy `crypto_trading.*`
 imports and module commands still forward to the canonical implementations.
 
@@ -595,14 +616,14 @@ and detail validation, not an exhaustive discovery claim.
 Preserved Windows helpers:
 
 ```powershell
-powershell -NoProfile -File .\student2\verification\collect_limitless_markets.ps1 -OutputPath .\outputs\limitless-listing.json
+powershell -NoProfile -File .\verification\collect_limitless_markets.ps1 -OutputPath .\outputs\limitless-listing.json
 python -m market_data.prediction_markets.limitless_live --listing-file outputs/limitless-listing.json
-python -m student2.verification.run_market_price_demo
+python -m verification.run_market_price_demo
 ```
 
 Choose new listing filenames; provenance is caller-attested, not independently
 authenticated. The targeted discovery's packaged PowerShell helper remains under
-`student2/verification/get_limitless_public.ps1` so installed and existing
+`verification/get_limitless_public.ps1` so installed and existing
 Windows workflows resolve the same file. Optional strict contract flags must be
 supplied together; they do not alter the market's actual rules.
 
@@ -662,21 +683,37 @@ python -m pytest tests/test_new_specialists.py tests/test_paper_pipeline.py \
   tests/test_student4_integration.py tests/test_project_layout.py -q
 ```
 
-Compatibility files forward to the same canonical module object, including
+Compatibility files in `compat/` forward to the same canonical module object, including
 private helpers, classes and monkeypatch targets. They contain no second agent
-algorithm. Existing imports and `python -m student4 ...`,
+algorithm. After installing the project, existing imports and `python -m student4 ...`,
 `python -m macro.collect ...`, and legacy Student 2 module CLIs keep working.
+For source-only tests, pytest adds `compat/` to its import path. Installed wheels
+expose the old package names directly, without exposing `compat` as a new API.
+The redundant `student1/src/crypto_trading/` copy was removed; its unique tests
+are now `tests/test_market_reports.py` and `tests/test_price_history_reports.py`.
 For new code use the canonical paths in the map above. Keep archived JSON evidence
 and third-party license files; moving documentation is not permission to rewrite
 historical results.
 
-The preserved fresh-wheel Windows verifier is
-`student2/verification/verify_fresh_environment.ps1`. It checks installed package
+The shared fresh-wheel Windows verifier is
+`verification/verify_fresh_environment.ps1`. It checks installed package
 imports/helpers and runs checkout-based offline tests. Ordinary tests do not
 validate live API credentials or forecast accuracy.
 
+Layout cleanup on 16 November 2026 moves all legacy names under `compat/`,
+collects tests in `tests/`, and makes runtime fixtures and verification scripts
+independent of student-specific directories. Saved evidence is preserved under
+`examples/reference_runs/`. The price/report tests were moved, not discarded.
+
+Verification of this layout: **440 tests and 127 subtests passed**; six
+PowerShell-only tests were skipped because PowerShell is unavailable here.
+A fresh wheel was built and installed, and shared modules, legacy aliases,
+packaged fixtures and helper scripts were verified outside the checkout.
+Both the canonical and legacy stablecoin demo commands completed with the
+same labelled synthetic inputs and results.
+
 Verification after the live-dashboard and 13-interface integration on 15 November 2026:
-**439 tests and 127 subtests passed**, including the Student 1 suite;
+**439 tests and 127 subtests passed**, including the shared price/report suite;
 six PowerShell-only tests were skipped because PowerShell is unavailable on this
 machine. Session-key privacy, local HTTP authorization, input clearing/form safeguards,
 Gemini key injection and bounded chart payloads are covered by the test suite.
@@ -738,7 +775,7 @@ be reconciled with the assumed 24 November submission deadline.
 
 ## Saved examples and provenance
 
-Historical examples remain in `student2/examples/`: the Mood run from
+Historical examples remain in `examples/reference_runs/`: the Mood run from
 9 November, News probe from 11 November, and paired fake-headline example under
 `news_specialist_fake_headline_20261110/`. The latter records an older
 7–8 November prediction window and a synthetic injected headline. These are saved

@@ -1,2 +1,0 @@
-"""Cryptocurrency trading analysis components."""
-

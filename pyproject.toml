@@ -38,20 +38,26 @@ student2-aws = ["langchain-aws"]
 [tool.setuptools]
 license-files = ["licenses/pharos-MIT.txt"]
 
+[tool.setuptools.package-dir]
+student2 = "compat/student2"
+student4 = "compat/student4"
+crypto_trading = "compat/crypto_trading"
+tradingagents = "compat/tradingagents"
+macro = "compat/macro"
+
 [tool.setuptools.packages.find]
-include = ["dashboard*", "agents*", "market_data*", "features*", "model_clients*", "exchange*", "risk*", "execution*", "experiments*", "crypto_trading*", "student4*", "student2*", "macro*", "tradingagents*"]
+where = [".", "compat"]
+exclude = ["compat*", "build*"]
+include = ["verification*", "dashboard*", "agents*", "market_data*", "features*", "model_clients*", "exchange*", "risk*", "execution*", "experiments*", "crypto_trading*", "student4*", "student2*", "macro*", "tradingagents*"]
 namespaces = true
 
 [tool.setuptools.package-data]
 dashboard = ["*.html", "*.css", "*.js"]
 "agents.specialists.prompts" = ["*.txt"]
-student4 = ["fixtures/*.json"]
-student2 = [
-    "requirements-betting-live.txt",
-    "examples/limitless_discovery/*.json",
-    "verification/*.ps1",
-]
+"market_data.stablecoin" = ["fixtures/*.json"]
+"market_data.prediction_markets" = ["fixtures/*.json"]
+verification = ["*.ps1"]
 
 [tool.pytest.ini_options]
-testpaths = ["tests", "student1/tests"]
-pythonpath = ["."]
+testpaths = ["tests"]
+pythonpath = [".", "compat"]

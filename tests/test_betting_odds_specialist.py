@@ -18,7 +18,7 @@ from student2.agents.schemas import NewsSpecialistResult
 
 ROOT = Path(__file__).resolve().parents[1]
 SYNTHETIC = ROOT / "tests/fixtures/betting_odds/synthetic_btc_daily.json"
-SAVED = ROOT / "student2/examples/limitless_discovery/market-463042-response.json"
+SAVED = ROOT / "market_data/prediction_markets/fixtures/market-463042-response.json"
 
 
 @pytest.fixture

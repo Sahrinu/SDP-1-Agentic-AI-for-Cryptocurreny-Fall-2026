@@ -153,7 +153,7 @@ def test_betting_without_saved_markets_does_not_query_the_internet(monkeypatch):
 
 
 def test_saved_limitless_market_stays_insufficient_with_no_fresh_quote():
-    path = Path(__file__).resolve().parents[1] / "student2/examples/limitless_discovery/market-463042-response.json"
+    path = Path(__file__).resolve().parents[1] / "market_data/prediction_markets/fixtures/market-463042-response.json"
     market = json.loads(path.read_text(encoding="utf-8-sig"))
     data = {"student2_forecast": deepcopy(CONTRACT), "student2_markets": [market],
             "student2_markets_observed_at": MARKETS_OBSERVED}

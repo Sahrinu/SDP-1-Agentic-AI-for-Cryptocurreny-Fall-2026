@@ -1,2 +1,0 @@
-"""Evidence-based analyst reports."""
-

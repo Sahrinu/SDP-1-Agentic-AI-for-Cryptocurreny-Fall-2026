@@ -1,4 +1,4 @@
-"""Run `python -m student4 demo` or `python -m student4 collect`."""
+"""Run `python -m market_data.stablecoin demo` or `python -m market_data.stablecoin collect`."""
 
 import argparse
 import json
@@ -13,7 +13,7 @@ from .history import export_history
 
 
 def run_demo(output: Path):
-    scenario = json.loads(files("student4").joinpath("fixtures/demo.json").read_text(encoding="utf-8"))
+    scenario = json.loads(files("market_data.stablecoin").joinpath("fixtures/demo.json").read_text(encoding="utf-8"))
     print("OFFLINE DEMO: synthetic stablecoin data and BTC prices; simulated USD cash.")
     trader = PaperTrader()
     agent = StablecoinAgent()
@@ -42,7 +42,7 @@ def run_demo(output: Path):
 
 
 def main(argv=None):
-    parser = argparse.ArgumentParser(description="Student 4: stablecoin data, agent, and paper trading")
+    parser = argparse.ArgumentParser(description="Stablecoin data, agent, and paper trading")
     subparsers = parser.add_subparsers(dest="command", required=True)
     demo = subparsers.add_parser("demo", help="Run a reproducible offline scenario")
     demo.add_argument("--output", type=Path, default=Path("outputs/demo"))

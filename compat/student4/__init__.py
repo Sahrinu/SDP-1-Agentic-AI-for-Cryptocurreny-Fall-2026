@@ -1,4 +1,4 @@
-"""Student 4's independent, standard-library-only project components."""
+"""Legacy exports. Implementations live in agents, market_data and execution."""
 
 from .agent import AgentSignal, StablecoinAgent
 from .data import CoinGeckoClient, DataError, StablecoinSnapshot

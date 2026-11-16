@@ -1,2 +1,0 @@
-# Optional read-only Socket.IO client; no API key or wallet required.
-python-socketio[client]>=5,<6

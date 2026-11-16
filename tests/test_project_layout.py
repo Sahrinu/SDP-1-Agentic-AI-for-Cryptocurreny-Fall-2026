@@ -65,7 +65,7 @@ def test_duplicate_registration_fails_instead_of_overwriting(tmp_path):
 def test_one_documentation_guide_and_local_navigation():
     root = Path(__file__).resolve().parents[1]
     docs = [root / "README.md"]
-    for folder in ("docs", "student1", "student2", "student4", "agents", "market_data", "execution", "examples"):
+    for folder in ("docs", "compat", "verification", "agents", "market_data", "execution", "examples"):
         docs.extend((root / folder).rglob("*.md"))
     assert docs == [root / "README.md"]
     guide = (root / "README.md").read_text()
@@ -82,3 +82,15 @@ def test_compatibility_patch_targets_share_canonical_globals(monkeypatch):
     replacement = object()
     monkeypatch.setattr(old, "urlopen", replacement)
     assert new.urlopen is replacement
+
+
+def test_legacy_names_are_grouped_and_active_resources_are_shared():
+    root=Path(__file__).resolve().parents[1]
+    for name in ('student1','student2','student4','crypto_trading','tradingagents','macro'):
+        assert not (root/name).exists()
+    for name in ('student2','student4','crypto_trading','tradingagents','macro'):
+        assert (root/'compat'/name).is_dir()
+    from market_data.prediction_markets.limitless_targeted_discovery import SCRIPT
+    assert SCRIPT==(root/'verification/get_limitless_public.ps1').resolve()
+    assert (root/'market_data/stablecoin/fixtures/demo.json').is_file()
+    assert (root/'market_data/prediction_markets/fixtures/market-463042-response.json').is_file()

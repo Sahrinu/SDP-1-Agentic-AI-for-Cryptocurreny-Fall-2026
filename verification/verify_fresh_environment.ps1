@@ -1,7 +1,7 @@
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
-$student2Root = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../..'))
+$student2Root = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 $student2Verifier = Join-Path $PSScriptRoot 'verify_installed.py'
 if (-not (Test-Path -LiteralPath (Join-Path $student2Root 'pyproject.toml') -PathType Leaf)) {
     throw "Repository pyproject.toml not found: $student2Root"
@@ -11,9 +11,9 @@ if (-not (Test-Path -LiteralPath $student2Verifier -PathType Leaf)) {
 }
 
 $student2Temp = [System.IO.Path]::GetTempPath()
-$student2Venv = Join-Path $student2Temp ('student2-fresh-env-' + [guid]::NewGuid().ToString('N'))
-$student2TestTemp = Join-Path $student2Temp ('student2-tests-' + [guid]::NewGuid().ToString('N'))
-$student2BuildRoot = Join-Path $student2Temp ('student2-wheel-source-' + [guid]::NewGuid().ToString('N'))
+$student2Venv = Join-Path $student2Temp ('agent-exchange-fresh-env-' + [guid]::NewGuid().ToString('N'))
+$student2TestTemp = Join-Path $student2Temp ('agent-exchange-tests-' + [guid]::NewGuid().ToString('N'))
+$student2BuildRoot = Join-Path $student2Temp ('agent-exchange-wheel-source-' + [guid]::NewGuid().ToString('N'))
 $student2Wheelhouse = Join-Path $student2Temp ('student2-wheelhouse-' + [guid]::NewGuid().ToString('N'))
 $student2OldPythonPath = [Environment]::GetEnvironmentVariable('PYTHONPATH', 'Process')
 $student2OldNoBytecode = [Environment]::GetEnvironmentVariable('PYTHONDONTWRITEBYTECODE', 'Process')
@@ -34,14 +34,14 @@ try {
     $student2Python = Join-Path $student2Venv 'Scripts/python.exe'
     # Build from an isolated copy so setuptools does not alter checkout build or egg-info files.
     New-Item -ItemType Directory -Path $student2BuildRoot, $student2Wheelhouse | Out-Null
-    foreach ($item in @('pyproject.toml', 'README.md', 'agents', 'market_data', 'features', 'model_clients', 'exchange', 'risk', 'execution', 'experiments', 'crypto_trading', 'macro', 'tradingagents', 'student2', 'student4', 'licenses')) {
+    foreach ($item in @('pyproject.toml', 'README.md', 'agents', 'market_data', 'features', 'model_clients', 'exchange', 'risk', 'execution', 'experiments', 'compat', 'verification', 'dashboard', 'licenses')) {
         Copy-Item -LiteralPath (Join-Path $student2Root $item) -Destination $student2BuildRoot -Recurse
     }
     & $student2Python -m pip wheel --retries 0 --timeout 15 --no-deps --wheel-dir $student2Wheelhouse $student2BuildRoot
     if ($LASTEXITCODE -ne 0) { throw "Wheel build failed (exit $LASTEXITCODE)" }
     $student2Wheels = @(Get-ChildItem -LiteralPath $student2Wheelhouse -Filter '*.whl' -File)
     if ($student2Wheels.Count -ne 1) { throw 'Expected exactly one built project wheel.' }
-    $student2WheelSpec = $student2Wheels[0].FullName + '[student2,student2-test,student2-live]'
+    $student2WheelSpec = $student2Wheels[0].FullName + '[test,specialists,live]'
     & $student2Python -m pip install --retries 0 --timeout 15 $student2WheelSpec
     if ($LASTEXITCODE -ne 0) { throw "Wheel installation failed (exit $LASTEXITCODE)" }
 
@@ -69,7 +69,7 @@ try {
         tests/test_limitless_targeted_discovery.py `
         tests/test_market_evidence_specialist.py `
         tests/test_market_price_context.py
-    if ($LASTEXITCODE -ne 0) { throw "Student 2 offline tests failed (exit $LASTEXITCODE)" }
+    if ($LASTEXITCODE -ne 0) { throw "Offline tests failed (exit $LASTEXITCODE)" }
 
     Write-Output "Fresh-environment verification passed: $student2Venv"
 }

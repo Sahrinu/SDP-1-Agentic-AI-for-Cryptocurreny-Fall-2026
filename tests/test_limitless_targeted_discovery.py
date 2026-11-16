@@ -119,7 +119,7 @@ class TargetedDiscoveryTests(unittest.TestCase):
 
 
 POWERSHELL=shutil.which('powershell') or shutil.which('pwsh')
-HELPER=Path(__file__).resolve().parents[1]/'student2'/'verification'/'get_limitless_public.ps1'
+HELPER=Path(__file__).resolve().parents[1]/'verification'/'get_limitless_public.ps1'
 HARNESS=r'''param($Helper,$Kind)
 function Invoke-RestMethod {
     param($Uri,$TimeoutSec,$ErrorAction)
@@ -152,7 +152,7 @@ class DemoIntegrationTests(unittest.TestCase):
             def run(cmd, **kwargs):
                 calls.append(cmd)
                 return subprocess.CompletedProcess(cmd,0)
-            with patch.object(demo,'__file__',str(root/'student2'/'verification'/'run_market_price_demo.py')), \
+            with patch.object(demo,'__file__',str(root/'verification'/'run_market_price_demo.py')), \
                  patch.object(demo.sys,'argv',['run_market_price_demo.py']), \
                  patch.object(discovery,'discover',return_value=(candidate,{'search_exhaustive':False})), \
                  patch.object(live,'observe_market',return_value={'observation_status':'book_observed','stage':'forecast_compatibility'}) as observe, \
@@ -172,7 +172,7 @@ class DemoIntegrationTests(unittest.TestCase):
     def test_failed_book_stops_before_binance_or_model(self):
         with tempfile.TemporaryDirectory() as tmp:
             root=Path(tmp)
-            with patch.object(demo,'__file__',str(root/'student2'/'verification'/'run_market_price_demo.py')), \
+            with patch.object(demo,'__file__',str(root/'verification'/'run_market_price_demo.py')), \
                  patch.object(demo.sys,'argv',['run_market_price_demo.py']), \
                  patch.object(discovery,'discover',return_value=(market(),{'search_exhaustive':False})), \
                  patch.object(live,'observe_market',return_value={'observation_status':'failed','stage':'book_stream'}), \
@@ -195,7 +195,7 @@ class DemoIntegrationTests(unittest.TestCase):
             return response()
         with tempfile.TemporaryDirectory() as tmp:
             root=Path(tmp)
-            with patch.object(demo,'__file__',str(root/'student2'/'verification'/'run_market_price_demo.py')), \
+            with patch.object(demo,'__file__',str(root/'verification'/'run_market_price_demo.py')), \
                  patch.object(demo.sys,'argv',['run_market_price_demo.py','--live','--model','mock-model']), \
                  patch.dict(demo.os.environ,{'GOOGLE_API_KEY':'offline-test-key'}), \
                  patch.object(demo,'datetime',Clock), \

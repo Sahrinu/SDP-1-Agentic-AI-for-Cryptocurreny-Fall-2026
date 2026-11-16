@@ -1,2 +1,0 @@
-"""Deterministic market features."""
-

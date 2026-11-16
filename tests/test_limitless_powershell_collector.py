@@ -8,7 +8,7 @@ from datetime import datetime
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-COLLECTOR = ROOT / 'student2' / 'verification' / 'collect_limitless_markets.ps1'
+COLLECTOR = ROOT / 'verification' / 'collect_limitless_markets.ps1'
 POWERSHELL = shutil.which('powershell') or shutil.which('pwsh')
 
 HARNESS = r'''param([string]$Collector, [string]$OutputPath, [string]$Scenario)

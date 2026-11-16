@@ -10,7 +10,7 @@ from pathlib import Path
 from student2.agents.binance_raw_context import assemble
 
 ROOT = Path(__file__).resolve().parents[1]
-COLLECTOR = ROOT / 'student2' / 'verification' / 'collect_binance_context.ps1'
+COLLECTOR = ROOT / 'verification' / 'collect_binance_context.ps1'
 POWERSHELL = shutil.which('powershell') or shutil.which('pwsh')
 HOURLY = '[[1000,"1","2","1","2","0",2000],[2001,"2","3","2","3","0",3001]]'
 OPENING = '[[1000,"1","2","1","2","0",2000]]'
