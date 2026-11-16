@@ -695,8 +695,9 @@ durable halt guarantee. These limitations preclude claiming production readiness
 
 The optional `execution/quality.py` wrapper checks timestamped bid/ask and
 executable ask depth before BUY. Missing or stale liquidity defers BUY without
-mutating balances; SELL and HOLD preserve the requested action and still pass
-through the durable gateway. OHLC replay does not invent historical liquidity.
+mutating balances, while the durable gateway still checks breaker triggers.
+SELL and HOLD preserve the requested action and pass through the durable gateway.
+OHLC replay does not invent historical liquidity.
 
 Accounting uses Decimal, whole-satoshi quantities, buy fees in cost basis and
 sell fees deducted from proceeds. Equity marks BTC at the supplied price without

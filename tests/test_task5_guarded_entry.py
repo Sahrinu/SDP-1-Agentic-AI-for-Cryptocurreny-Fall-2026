@@ -4,6 +4,7 @@ from decimal import Decimal
 import pytest
 
 from execution.paper_trading import PaperTrader
+from execution.quality import execute_with_quality
 from risk.durable_gateway import RiskGateway, RiskPolicy
 from risk.gateway import execute_guarded
 
@@ -111,5 +112,62 @@ def test_invalid_sell_size_never_fills_during_breaker_evaluation(tmp_path):
                            timestamp=NOW+timedelta(minutes=1), probability_up='.5')
         assert snapshot(trader) == before
         assert trader.last_risk_outcome['status'] == 'blocked'
+    finally:
+        gateway.close()
+
+
+@pytest.mark.parametrize('trigger', ['forecast swing', 'cumulative loss'])
+def test_liquidity_deferral_still_latches_breaker_without_filling(tmp_path, trigger):
+    trader, gateway = configured(tmp_path)
+    try:
+        price, forecast = '100', '.7'
+        if trigger == 'cumulative loss':
+            assert trader.execute('BUY', '100', buy_fraction='.2', timestamp=NOW,
+                                  probability_up='.5') is not None
+            price, forecast = '50', '.5'
+        before = (trader.cash, trader.btc, trader.cost_basis, trader.realized_pnl,
+                  trader.total_fees, tuple(trader.trades))
+        decision, trade, reason = execute_with_quality(
+            trader, 'BUY', price, quote=None, requested_buy_fraction='.1',
+            timestamp=NOW + timedelta(minutes=1), probability_up=forecast)
+        assert trade is None and decision.action == 'HOLD'
+        assert reason.startswith('DEFER:') and trigger in reason
+        assert gateway.halted and trader.last_risk_outcome['status'] == 'halted'
+        assert (trader.cash, trader.btc, trader.cost_basis, trader.realized_pnl,
+                trader.total_fees, tuple(trader.trades)) == before
+        assert [event['event'] for event in gateway.audit_events()] == ['initialize', 'halt']
+        assert trader.execute('BUY', price, buy_fraction='.1',
+                              timestamp=NOW + timedelta(minutes=2), probability_up='.5') is None
+        assert trader.last_risk_outcome['status'] == 'halted'
+    finally:
+        gateway.close()
+
+
+def test_liquidity_deferral_reports_actual_request_when_not_halted(tmp_path):
+    trader, gateway = configured(tmp_path)
+    try:
+        before = snapshot(trader)
+        decision, trade, reason = execute_with_quality(
+            trader, 'BUY', '100', quote=None, requested_buy_fraction='.1',
+            timestamp=NOW, probability_up='.5')
+        assert trade is None and snapshot(trader) == before
+        assert decision.reason == reason and reason.startswith('DEFER:')
+        assert trader.last_risk_outcome['action'] == 'BUY'
+        assert trader.last_risk_outcome['reason'] == reason
+        assert not gateway.halted
+    finally:
+        gateway.close()
+
+
+def test_quality_invalid_order_still_checks_breaker_without_filling(tmp_path):
+    trader, gateway = configured(tmp_path)
+    try:
+        before = snapshot(trader)
+        with pytest.raises(ValueError):
+            execute_with_quality(trader, 'BUY', None, quote=None,
+                                 timestamp=NOW, probability_up='.7')
+        assert snapshot(trader) == before
+        assert gateway.halted and trader.last_risk_outcome['status'] == 'halted'
+        assert 'forecast swing' in trader.last_risk_outcome['reason']
     finally:
         gateway.close()
