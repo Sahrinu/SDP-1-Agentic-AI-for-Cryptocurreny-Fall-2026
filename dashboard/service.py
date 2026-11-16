@@ -17,6 +17,7 @@ from exchange.vote import vote
 from risk.auditor import audit_forecast
 from risk.circuit_breaker import CircuitBreaker, constrained_action
 from risk.gateway import execute_guarded
+from risk.durable_gateway import RiskGateway, RiskPolicy
 from execution.paper_trading import PaperTrader, Trade
 
 
@@ -120,8 +121,11 @@ def forecast_snapshot(data, quote, *, client=None, decision_time=None, on_progre
 
 class PaperStore:
     """Atomic, idempotent paper account. No network or real exchange orders."""
-    def __init__(self,path):
+    def __init__(self,path, *, risk_policy=None, risk_state_path=None, buy_fraction=None):
         self.path = str(path)
+        self.risk_policy = risk_policy
+        self.risk_state_path = risk_state_path
+        self.buy_fraction = buy_fraction
         Path(path).parent.mkdir(parents=True,exist_ok=True)
         with sqlite3.connect(self.path) as db:
             db.execute('CREATE TABLE IF NOT EXISTS state (id INTEGER PRIMARY KEY, payload TEXT NOT NULL)')
@@ -149,21 +153,54 @@ class PaperStore:
                 if key in saved:
                     setattr(trader,key,Decimal(saved[key]))
             trader.trades = [Trade(**t) for t in saved.get('trades',[])]
-            breaker = CircuitBreaker(**saved.get('breaker',{}))
             p = forecast['methods']['exchange']
             price = forecast['quote']['price']
-            summary = trader.summary(price)
-            status = breaker.check(summary['equity_usd'],p)
             requested = 'HOLD' if p is None else 'BUY' if p >= .55 else 'SELL' if p <= .45 else 'HOLD'
-            action = constrained_action(requested,halted=status['halted'],audit_passed=p is not None,cap_feasible=forecast['cap_feasible'])
-            risk,trade = execute_guarded(trader,action,price,timestamp=instant)
-            result = {'requested':requested,'constrained':action,'risk':risk.to_dict(),
+            action = constrained_action(requested, audit_passed=p is not None,
+                                        cap_feasible=forecast['cap_feasible'])
+            # Never silently clear a halt saved by the earlier dashboard implementation.
+            legacy_breaker = saved.get('breaker', {})
+            legacy_halted = bool(legacy_breaker.get('halted'))
+            configured = (isinstance(self.risk_policy, RiskPolicy) and self.risk_state_path is not None
+                          and self.buy_fraction is not None and not legacy_halted)
+            gateway = None
+            problem = None
+            if configured:
+                try:
+                    gateway = RiskGateway(trader, self.risk_policy, state_path=self.risk_state_path)
+                except Exception:
+                    problem = 'Risk state unavailable or paper account does not match; inspect before resuming'
+            else:
+                problem = ('Prior circuit breaker is halted; explicit migration and review required'
+                           if legacy_halted else
+                           'Explicit risk policy, initialized durable state and buy fraction are required')
+            risk,trade = execute_guarded(trader,action,price,timestamp=instant,
+                requested_buy_fraction=self.buy_fraction if gateway is not None else '1', probability_up=p)
+            outcome = trader.last_risk_outcome or {}
+            risk_result = risk.to_dict()
+            risk_result['status'] = outcome.get('status', 'blocked')
+            if problem:
+                risk_result['reason'] = problem
+                risk_result['status'] = 'blocked'
+            elif outcome.get('status') == 'no_trade' and requested == 'BUY' and action != 'BUY':
+                risk_result['status'] = 'blocked'
+                risk_result['reason'] = 'New BUY blocked: the 20% agent influence cap is infeasible'
+            status = {'halted': bool(legacy_halted or outcome.get('breaker_halted')),
+                      'reason': problem or outcome.get('reason'),
+                      'configured': gateway is not None,
+                      'max_forecast_swing': str(self.risk_policy.max_forecast_swing) if gateway is not None else None,
+                      'max_cumulative_loss': str(self.risk_policy.max_cumulative_loss) if gateway is not None else None}
+            if gateway is not None:
+                gateway.close()
+            result = {'requested':requested,'constrained':action,'risk':risk_result,
                 'breaker':status,'trade':asdict(trade) if trade else None,
                 'portfolio':trader.summary(price),'forecast_id':forecast['id'],
                 'recorded_at':instant.isoformat(),'reference_quote':forecast['quote'],
                 'quote_basis':'Same recently observed reference close, with simulated adverse slippage; not a guaranteed market fill'}
             state = {k:str(getattr(trader,k)) for k in ('cash','btc','cost_basis','realized_pnl','total_fees')}
-            state.update(trades=[asdict(t) for t in trader.trades],breaker=asdict(breaker))
+            state.update(trades=[asdict(t) for t in trader.trades])
+            if legacy_breaker:
+                state['breaker'] = legacy_breaker
             db.execute('INSERT OR REPLACE INTO state VALUES(1,?)',(json.dumps(state),))
             db.execute('INSERT INTO decisions VALUES(?,?)',(forecast['id'],json.dumps(result)))
             return result

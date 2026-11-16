@@ -1,0 +1,35 @@
+# Student 2 evidence and archived documentation
+
+The project-wide [README](../README.md) is the current guide to setup, the
+specialist adapters, forecast contracts, testing and the Limitless tools. Main
+consolidated the former `student2/README.md`, `INTEGRATION.md`,
+`BETTING_ODDS_DATA.md`, `BETTING_ODDS_LIVE.md`, `MARKET_EVIDENCE.md` and
+`examples/README.md` there; their earlier commands, implementation paths and
+test counts should not be used as current instructions.
+
+## Evidence provenance and interpretation
+
+- The saved [market 463042 discovery response](../market_data/prediction_markets/fixtures/market-463042-response.json)
+  has no recorded retrieval timestamp. It is historical discovery evidence,
+  not a fresh quote or evidence of usable order-book depth. Its fixed window
+  and split tie payout differ from a rolling strict-up target.
+- A validated streamed book event binds the recorded levels and quote summary
+  to the event timestamp; that timestamp does not prove when each resting order
+  was created, guarantee that a displayed price is executable, or establish
+  calibration. A REST listing retrieval time does not timestamp its quote, and
+  the REST order book does not document a quote-freshness guarantee.
+- A model can use a valid market with a different window, threshold or tie rule
+  as evidence for an explicitly specified target while disclosing the differences
+  and assumptions. Its answer is an experimental model estimate, separate from
+  the observed YES payout midpoint. Numerical equality with that midpoint is not
+  itself a validation failure, but mechanical copying is not a forecasting method.
+  Required nonblank target, contract-difference and assumption explanations do
+  not independently establish that a model's statements are true or calibrated.
+- The strict quote inspector and the market-evidence model use the same market
+  information and must not be counted as independent votes. Missing, stale,
+  invalid or insufficient evidence remains grounds for abstention.
+- The saved Mood, News and fake-headline examples are historical artifacts. The
+  headline was synthetic; the paired comparison is not proof of general
+  robustness. Retrospective model estimates do not establish prospective accuracy.
+  Evaluate saved predictions against held-out outcomes using the declared source,
+  timestamps and settlement convention before claiming an improvement.

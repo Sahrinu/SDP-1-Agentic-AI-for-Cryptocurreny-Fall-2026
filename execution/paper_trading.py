@@ -55,8 +55,53 @@ class PaperTrader:
         self.realized_pnl = ZERO
         self.total_fees = ZERO
         self.trades: list[Trade] = []
+        self._risk_gateway = None
+        self.__risk_token = None
+        self.last_risk_outcome = None
 
-    def execute(self, action: str, btc_price_usd, *, buy_fraction="1", timestamp=None) -> Trade | None:
+    def _bind_risk_gateway(self, gateway, token):
+        from risk.durable_gateway import RiskGateway
+        if type(gateway) is not RiskGateway or gateway._trader is not self or token is None or self._risk_gateway is not None:
+            raise ValueError('A paper account may be bound to one risk gateway')
+        self._risk_gateway, self.__risk_token = gateway, token
+
+    def execute(self, action: str, btc_price_usd, *, buy_fraction="1", timestamp=None,
+                probability_up=None, explanation=None) -> Trade | None:
+        """Submit one paper request through a configured durable risk gateway."""
+        when=timestamp or datetime.now(timezone.utc)
+        # Preserve the public API's validation errors, but still let a configured
+        # gateway evaluate and persist breaker triggers before reporting them.
+        # An invalid request must never be allowed to fill in that evaluation.
+        invalid = None
+        try:
+            if action not in {'BUY', 'SELL', 'HOLD'}:
+                raise ValueError('action must be BUY, SELL, or HOLD')
+            decimal_value(btc_price_usd, 'BTC price', positive=True)
+            fraction = decimal_value(buy_fraction, 'buy fraction', positive=True)
+            if fraction > 1:
+                raise ValueError('buy fraction must be in (0, 1]')
+            if not isinstance(when, datetime) or when.tzinfo is None or when.utcoffset() is None:
+                raise ValueError('timestamp must be a timezone-aware datetime')
+            if self.trades and when < datetime.fromisoformat(self.trades[-1].timestamp):
+                raise ValueError('Trades must be in chronological order')
+        except ValueError as exc:
+            invalid = exc
+        if self._risk_gateway is None:
+            self.last_risk_outcome = {'status':'blocked','reason':'Explicit durable risk gateway is required','trade':None}
+            if invalid is not None:
+                raise invalid
+            return None
+        outcome=self._risk_gateway.execute(action if invalid is None else None,probability_up=probability_up,btc_price_usd=btc_price_usd,
+                                           timestamp=when,buy_fraction=buy_fraction,explanation=explanation)
+        self.last_risk_outcome=outcome
+        if invalid is not None:
+            raise invalid
+        return Trade(**outcome['trade']) if outcome.get('status')=='executed' and outcome.get('trade') else None
+
+    def _execute_approved(self, action: str, btc_price_usd, *, buy_fraction="1", timestamp=None,
+                          _risk_token=None) -> Trade | None:
+        if self.__risk_token is None or _risk_token is not self.__risk_token:
+            raise PermissionError('Only the bound risk gateway may execute a paper order')
         if action not in {"BUY", "SELL", "HOLD"}:
             raise ValueError("action must be BUY, SELL, or HOLD")
         price = decimal_value(btc_price_usd, "BTC price", positive=True)

@@ -90,7 +90,7 @@ python examples/paper_replay_demo.py
 # Actual Borrowing/ETF/Crash/Contrarian code on labelled synthetic inputs
 python examples/new_agents_demo.py
 
-# Macro forward fill plus capped buys and overweight liquidation
+# Synthetic macro, paper execution, cap block, persistent halt and audited reset
 python examples/student5_demo.py
 
 # Independent stablecoin component demo (synthetic; not the whole ensemble)
@@ -99,9 +99,22 @@ python -m market_data.stablecoin demo
 
 The paper and new-agent demos create timestamped `outputs/` directories. Their
 input observations are synthetic and must not be presented as real-agent returns.
-The standalone stablecoin demo writes `outputs/demo/`, can overwrite that demo
-folder, and deliberately feeds its own signal directly to the simulator. Use the
-connected replay for the ensemble and mandatory risk checks.
+Those two replay examples do not supply the required durable risk configuration,
+so their paper orders are blocked. The Student 5 demo uses explicit synthetic
+breaker settings. The standalone stablecoin demo also uses synthetic settings and
+routes its signal through the risk gateway. It requires an empty output directory;
+use `--output` with a new path for another run.
+
+For a reproducible offline Task 5 walkthrough, run `python examples/student5_demo.py`
+and inspect the printed JSON and its saved `outputs/student5_demo/<run-id>/student5_demo.json`.
+`risk_checks` shows an executed BUY, an oversized BUY blocked by the 25% cap,
+and a forecast-swing halt. Compare the account after the block with the preceding
+account: cash, BTC and fees remain unchanged. `restart_and_reset` uses a separate
+flat account to show a halt still blocking after reopening the risk state, an
+explicit reset, a subsequent BUY and the initialize/halt/reset audit events.
+The example recreates a flat account; it does not restore a traded account. Both
+the 0.30 forecast swing and 0.10 cumulative-loss limits are synthetic demo values,
+not an agreed team policy. No provider or model calls are made.
 
 ## Live dashboard and demo-day workflow
 
@@ -155,7 +168,9 @@ completed historical replay (outcomes visible immediately). **Replay real BTC hi
 candles with the three price specialists and Contrarian; all missing non-price
 sources abstain. The participation guard blocks new BUYs with only four active
 agents. Its probabilities, paper accounts, baselines and uncertainty outputs are
-saved under `outputs/dashboard/real_replays/`. This is not the full 13-agent study.
+saved under `outputs/dashboard/real_replays/`. The current dashboard replay does
+not supply the required durable risk settings, so paper orders and baselines are
+blocked. This is not the full 13-agent study.
 The separate bundled replay is prominently **synthetic** and demonstrates the
 pipeline only. A full performance study needs archived non-price evidence too.
 
@@ -172,14 +187,17 @@ the installed dashboard HTML is also included as package data.
 
 Live archives are in `outputs/dashboard/snapshots/`; full forecasts, evidence,
 weights and model token/latency usage are in `outputs/dashboard/forecasts/`.
-`outputs/dashboard/paper.sqlite3` atomically persists account state, breaker state,
-trades and unique decision IDs across server restarts. The dashboard requires a
-new fresh forecast after restart. A three-minute forecast/quote age limit applies
-to paper decisions. BUY requires five active agents so the 20% influence cap is
-feasible; unavailable/audit-failed agents are excluded. A 10% drawdown or forecast
-jump greater than 25 percentage points latches the breaker. SELL and mandatory
-25% gateway liquidations remain available. Breaker reset is deliberately not a
-web button; inspect and retain the ledger before any manual account reset.
+`outputs/dashboard/paper.sqlite3` persists account state and unique decision IDs.
+Paper orders currently fail closed because the dashboard does not configure the
+separate durable risk state, explicit breaker thresholds and BUY fraction. A
+configured `PaperStore` uses separate account and risk-state transactions; a
+mismatch after an interrupted update blocks further execution. The dashboard
+requires a new fresh forecast after restart. A three-minute forecast/quote age
+limit applies to paper decisions. BUY requires five active agents so the 20%
+influence cap is feasible; unavailable/audit-failed agents are excluded. No
+production breaker thresholds are assumed. A latched halt requires an explicit,
+audited reset; the dashboard provides no reset button. SELL is also blocked when
+the breaker is halted, and the gateway never forces a liquidation.
 
 | Input | Live connection | Timing and remaining requirements |
 | --- | --- | --- |
@@ -202,12 +220,12 @@ are eligible for today's live forecast, not backdated historical forecasts.
 
 `risk/auditor.py` checks result schema, evidence presence, supplied citation IDs
 when available and timestamps. It is a deterministic validator, not independent
-news verification. `risk/circuit_breaker.py` pauses new risk; `risk/gateway.py`
-continues enforcing the cost-aware 25% total BTC/equity ceiling.
-
-For the historical runner, add `--paper --circuit-breaker` to enable the breaker
-and minimum-participation guard. The switch is opt-in to preserve reproducibility
-of older saved experiments. Every new runner execution also saves
+news verification. `risk.durable_gateway` enforces the configured circuit
+breaker and the cost-aware 25% total BTC/equity ceiling; `risk.gateway` forwards
+paper requests to it. For the historical runner, `--paper` requires explicit
+breaker limits, initial forecast baseline and BUY fraction; without them all
+orders are blocked. `--circuit-breaker` also enables the minimum-participation
+guard. Every new runner execution also saves
 `uncertainty.json`: missing forecasts are excluded, with circular seven-day block
 bootstrap Brier intervals. Small samples remain unreliable.
 
@@ -215,14 +233,15 @@ Cost-matched trading baselines have their own command:
 
 ```bash
 python -m experiments.evaluation --prices data/btc_prices.csv --start 2026-09-01 --end 2026-10-31 --output outputs/baselines_capped
-# Add --uncapped for conventional full-allocation buy-and-hold/SMA comparisons.
 ```
 
 Supply at least 50 warmup daily closes and the day after the final forecast.
 Signals use D close and execute at D+1 open with the same 0.10% fee and 5 bps
-slippage. Capped allocation can be liquidated by the gateway after price drift;
-it is explicitly distinguished from conventional uncapped buy-and-hold. These
-utilities generate results only from supplied prices; they do not supply a
+slippage. Without explicit risk configuration and an eligible forecast, the
+baseline command records blocked paper orders. The current paper gateway does
+not support uncapped execution or forced liquidation after price drift. A
+synthetic baseline can supply explicitly labelled guard inputs through the Python
+API; those inputs are not model forecasts. These utilities do not supply a
 completed real-data study or repeated model attack experiment.
 
 ## Folder and component map
@@ -372,6 +391,14 @@ refuses to overwrite existing accounts. The default policy is BUY for
 `--buy-threshold` and `--sell-threshold` equally for all methods if needed. These
 are demonstration thresholds, not optimized trading rules.
 
+Paper execution also requires explicit breaker limits, an initial forecast
+baseline and a BUY cash fraction. Without all four settings, orders fail closed;
+no production values have been agreed. For a synthetic offline replay only,
+pass `--synthetic --risk-max-forecast-swing 0.9 --risk-max-cumulative-loss 0.9
+--risk-previous-forecast 0.5 --paper-buy-fraction 0.24` along with the command
+above and synthetic inputs. The settings are demonstration choices. Every
+replay account has its own durable risk state; an existing output is never reset.
+
 Forecast D uses completed inputs through D; execution is at the following UTC
 day's **open**, with adverse slippage and fees. This abstracts computation/order
 latency; it does not guarantee an achievable real fill. With close-only data,
@@ -402,8 +429,8 @@ strings are not valid timestamped article injections for the model-backed News
 adapter. Noncomparable rows are not evidence of robustness.
 
 A replay starts fresh accounts. Exports do not automatically resume a live account
-or schedule a background service. A GUI has not been added; saved outputs form a
-consistent interface for one.
+or schedule a background service. The dashboard displays forecasts and paper
+outcomes, subject to its explicit risk-configuration limitation described above.
 
 ## Data sources and timing
 
@@ -453,7 +480,8 @@ percent units. Treasury yield is a market proxy, not the Fed policy rate. The
 collector writes `data/macro.csv` and raw snapshots in `data/macro_raw/`.
 
 Fields include `dxy`, `treasury_10y`, each series' `*_observed_on`,
-`*_available_at`, `*_forward_filled`, plus `source` and `availability_basis`.
+`*_available_at`, `*_forward_filled`, plus `source`, `availability_basis`,
+`retrieval_completed_at` and `publication_basis`.
 Completed session D is **assumed** available at D+1 00:00 UTC. This is not a Yahoo
 publication SLA or a verified vintage archive. Today's incomplete UTC date is
 rejected. Forward fill carries the last known value through weekends/holidays
@@ -635,35 +663,41 @@ forecasting. Offline transport tests use mocks, not live execution.
 
 ## Risk and execution rules
 
-`execution/paper_trading.py` owns account math; `risk/gateway.py` owns the mandatory
-position limit. New code should execute through:
-
-```python
-from execution.paper_trading import PaperTrader
-from risk.gateway import execute_guarded
-
-trader = PaperTrader(initial_cash="10000", fee_rate="0.001", slippage_bps="5")
-# Reuse this account across cycles; final_action comes from the ensemble policy.
-decision, trade = execute_guarded(trader, final_action, btc_price_usd)
-```
+`execution/paper_trading.py` owns account math. Public paper execution requires
+an explicitly initialized `risk.durable_gateway.RiskGateway`; without one it
+fails closed. `risk.gateway.execute_guarded` forwards the actual requested
+order and forecast to that gateway once. Configure explicit `RiskPolicy`
+forecast-swing and cumulative-loss limits, an aware timestamp, a previous
+forecast and a BUY fraction; the project has no agreed production values for
+those settings. Each state file is initialized explicitly, is bound to an
+account and stores halts across normal restarts. A reset requires a caller-
+attested actor, reason, timestamp and baseline and is audit logged.
+The breaker halts at or above either configured absolute forecast swing or loss
+from initial equity at the supplied quote. A halt blocks SELL as well as BUY.
+Reset does not waive the limits: if the loss still breaches its threshold, the
+next check halts again. The reset actor is not authenticated by this prototype.
 
 The invariant at each checked execution quote is BTC market value <= 25% of
 post-cost portfolio equity. BUY sizing includes existing holdings, fees and
-slippage; quantities/fractions round down. Repeated buys cannot bypass the cap.
-`buy_fraction` is a fraction of cash, not an exposure limit or maximum-loss rule.
+slippage. A request exceeding the cap is blocked rather than resized. A HOLD
+or BUY does not cause an unsolicited SELL when price drift makes BTC overweight;
+an explicit SELL may reduce the position unless the breaker has halted. Missing
+forecasts remain unavailable and never authorize a trade. The 25% exposure cap
+is separate from the Exchange's 20% agent influence cap.
 
-SELL closes all BTC. If appreciation already made BTC overweight, the gateway
-can change HOLD/BUY to full SELL because the current simulator lacks partial
-sales. The cap is checked when execution is evaluated, not continuously between
-price ticks; daily equity outputs flag drift above it. Direct simulator calls
-bypass risk approval and belong only in isolated component tests.
+The dashboard's `PaperStore` requires an explicit policy, an already initialized
+risk-state path and a BUY fraction. Its default configuration blocks orders and
+reports the missing settings. Dashboard account and risk state use separate
+SQLite transactions: if a process stops between commits, the account mismatch
+blocks subsequent orders and requires inspection. Account restoration and
+identity authentication are not provided; a storage failure also prevents a
+durable halt guarantee. These limitations preclude claiming production readiness.
 
-The optional `execution/quality.py` wrapper additionally checks a timestamped
-bid/ask and executable BTC ask depth at or below the adverse fill price. Quotes
-must be no more than 30 seconds old. Missing/insufficient depth or excessive spread
-defers BUY without mutating balances. Required liquidation is never blocked.
-This gate does not fetch books or model partial fills. OHLC replay does not enable
-it without archived book quotes or invent historical liquidity.
+The optional `execution/quality.py` wrapper checks timestamped bid/ask and
+executable ask depth before BUY. Missing or stale liquidity defers BUY without
+mutating balances, while the durable gateway still checks breaker triggers.
+SELL and HOLD preserve the requested action and pass through the durable gateway.
+OHLC replay does not invent historical liquidity.
 
 Accounting uses Decimal, whole-satoshi quantities, buy fees in cost basis and
 sell fees deducted from proceeds. Equity marks BTC at the supplied price without
@@ -727,11 +761,51 @@ The updated wheel built from a fresh temporary source staging directory, and new
 modules, the 13-role catalog and packaged dashboard HTML imported successfully
 outside the checkout. No Gemini inference was verified without a local key.
 
+The World Economy agent uses `market_data.macro_point_in_time` for both the
+latest observation and its six-session lookback. It rejects future, conflicting
+and stale records and reports their original observation date and data age.
+The historical Yahoo path explicitly opts into assumed next-midnight availability;
+its publication timestamp remains unknown. The live path uses the actual
+completion time of both downloads, not a provider publication timestamp. The
+selector's publication times are caller-attested and never independently
+verified. Retrospective Yahoo data with unknown vintages cannot establish what
+was actually known at a historical prediction time.
+
+[Student 2 evidence notes](docs/student2-evidence-notes.txt) preserve the useful
+caveats from the six guides consolidated by main. Market 463042 has no recorded
+retrieval timestamp and is not a fresh quote; a book event timestamp does not
+prove resting-order age or execution. A model estimate is separate from the
+market midpoint, and numerical equality alone is not invalid. Retrospective
+examples do not establish prospective accuracy or calibration.
+
 The earlier organization wheel built successfully, and isolated installed imports and packaged
 helpers were verified outside the checkout. Both the stablecoin component demo
 and the new-specialist paper replay completed using labelled synthetic data.
 
 ## Schedule and responsibilities
+
+Task 5 verification on 16 November 2026: **550 tests and 132 subtests passed**
+with three dependency deprecation warnings on Windows, using a fresh workspace-local
+pytest temporary directory. The mocked PowerShell collector's three tests passed;
+no timeout increase or provider calls were needed. The default system pytest temp
+directory was inaccessible in this environment.
+
+Task 5 reconciliation status (16 November): the offline checks exercise the
+caller-attested macro selector, paper exposure cap, breaker restart and audited
+reset, and dashboard decision data. Browser presentation still needs the manual
+check below. Historical macro provider/vintage policy, team breaker thresholds,
+account recovery and cross-database crash reconciliation remain open. Synthetic
+example values are not approved team settings. Student 2 live market forecasting
+remains subject to the source, timestamp and contract limitations above.
+
+Manual dashboard check with controlled offline fixture data: confirm mixed
+forecasts, abstention reasons and failures, including an all-abstain run; compare
+an executed BUY, a cap-blocked BUY, a halted SELL and a HOLD with their supplied
+status, reason, ledger and balances; reload and check the persisted decision.
+Confirm the default configuration reports the breaker as unconfigured. An
+executed order requires an explicitly configured paper policy and state; the
+default dashboard deliberately blocks orders. Browser rendering has not been
+verified in this workspace.
 
 Planning window: **14 September–24 November 2026**, assuming submission on
 24 November. The chart is an editable planning baseline, not evidence that tasks
@@ -753,17 +827,17 @@ gantt
     Connect six agent demo                        :demo, 2026-11-12, 2026-11-16
     Remaining specialists and debate baseline     :remaining, 2026-11-14, 2026-11-19
     section Macro and risk
-    Macro source and availability policy          :macro_policy, 2026-11-14, 2026-11-15
+    Resolve macro source and availability policy  :macro_policy, 2026-11-14, 2026-11-20
     World economy agent and macro history         :macro, 2026-11-14, 2026-11-17
-    Risk gateway and execution tests              :gateway, 2026-11-14, 2026-11-17
-    Contrarian and circuit breaker                :risk_more, 2026-11-16, 2026-11-19
+    Risk gateway and offline execution checks     :gateway, 2026-11-14, 2026-11-17
+    Agree breaker policy and recovery approach    :risk_more, 2026-11-16, 2026-11-20
     Security analysis and contribution evidence   :security, 2026-11-17, 2026-11-22
     section Validation and submission
     Full clean replay and integration checks      :clean, 2026-11-18, 2026-11-20
     Repeated attack replay and comparisons        :attacks, 2026-11-19, 2026-11-22
     Statistics and results review                 :stats, 2026-11-21, 2026-11-23
     Report preparation                            :report, 2026-11-14, 2026-11-24
-    Final demo rehearsal and submission checks    :rehearsal, 2026-11-23, 2026-11-24
+    Browser check, demo rehearsal and submission  :rehearsal, 2026-11-23, 2026-11-24
     Submission                                   :milestone, submit, 2026-11-24, 0d
 ```
 

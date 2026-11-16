@@ -13,12 +13,26 @@ from student4 import PaperTrader, StablecoinSnapshot
 from student4.data import COINS
 from student4.execution import LiquidityQuote, execute_with_quality
 from student4.history import export_history
+from risk.durable_gateway import RiskGateway, RiskPolicy
 
 
 NOW = datetime(2026, 11, 7, 23, 59, tzinfo=timezone.utc)
 
 
 class IntegrationTests(unittest.TestCase):
+    def setUp(self):
+        self.risk_tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.risk_tmp.cleanup)
+
+    def configured(self, trader):
+        policy = RiskPolicy("1", "1")  # Synthetic test thresholds.
+        path = Path(self.risk_tmp.name) / "risk.sqlite3"
+        RiskGateway.initialize_state(path, policy=policy, trader=trader, actor="synthetic-test",
+            reason="test setup", timestamp=NOW-timedelta(minutes=1), previous_forecast="0.5")
+        gateway = RiskGateway(trader, policy, state_path=path)
+        self.addCleanup(gateway.close)
+        return trader
+
     def history(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -78,9 +92,10 @@ class IntegrationTests(unittest.TestCase):
         self.assertEqual(expected, stablecoin.forecast("2026-11-07", data))
 
     def test_quality_buy_still_enforces_exposure_cap(self):
-        trader = PaperTrader()
+        trader = self.configured(PaperTrader())
         quote = LiquidityQuote("59990", "60010", "1", NOW)
-        decision, trade, reason = execute_with_quality(trader, "BUY", "60000", quote=quote, timestamp=NOW)
+        decision, trade, reason = execute_with_quality(trader, "BUY", "60000", quote=quote,
+            requested_buy_fraction="0.24", timestamp=NOW, probability_up="0.5")
         self.assertIsNotNone(trade)
         self.assertLessEqual(decision.projected_exposure, .25)
         self.assertLessEqual(trader.btc * 60000 / (trader.cash + trader.btc * 60000), .25)
@@ -97,9 +112,18 @@ class IntegrationTests(unittest.TestCase):
             self.assertEqual(trader.btc, 0)
 
     def test_quality_gate_never_blocks_required_liquidation(self):
-        trader = PaperTrader()
-        trader.execute("BUY", 60000, timestamp=NOW)
-        decision, trade, _ = execute_with_quality(trader, "HOLD", 60000, timestamp=NOW)
+        trader = self.configured(PaperTrader())
+        trader.execute("BUY", 60000, buy_fraction="0.24", timestamp=NOW, probability_up="0.5")
+        before = (trader.cash, trader.btc, tuple(trader.trades))
+        # Price drift above cap cannot silently turn HOLD into a SELL.
+        decision, trade, _ = execute_with_quality(trader, "HOLD", 100000,
+            timestamp=NOW+timedelta(seconds=1), probability_up="0.5")
+        self.assertEqual(decision.action, "HOLD")
+        self.assertIsNone(trade)
+        self.assertEqual((trader.cash, trader.btc, tuple(trader.trades)), before)
+        # An explicit risk-reducing SELL does not require a BUY liquidity quote.
+        decision, trade, _ = execute_with_quality(trader, "SELL", 100000,
+            timestamp=NOW+timedelta(seconds=2), probability_up="0.5")
         self.assertEqual(decision.action, "SELL")
         self.assertIsNotNone(trade)
         self.assertEqual(trader.btc, 0)

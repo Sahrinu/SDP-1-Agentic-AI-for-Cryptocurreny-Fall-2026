@@ -6,6 +6,7 @@ import pytest
 from experiments.debate import debate
 from experiments.evaluation import paired_brier,trading_baselines
 from dashboard.service import json_safe
+from risk.durable_gateway import RiskPolicy
 
 
 def snapshot():
@@ -47,15 +48,32 @@ def test_baselines_next_day_costs_and_future_invariance(tmp_path):
     index=pd.date_range('2026-01-01',periods=80,tz='UTC')
     frame=pd.DataFrame({'open':[100+i for i in range(80)],'close':[100.5+i for i in range(80)]},index=index)
     start,end=str(index[50].date()),str(index[60].date())
-    first=trading_baselines(frame,start=start,end=end,output=tmp_path/'a')
+    options=dict(risk_policy=RiskPolicy('1','1'), previous_forecast='.5', buy_fraction='.24',
+                 risk_probability='.5', synthetic=True)  # Synthetic guard input, not a model forecast.
+    first=trading_baselines(frame,start=start,end=end,output=tmp_path/'a',**options)
     assert all(float(x['total_fees_usd'])>0 for x in first)
     trade=pd.read_csv(tmp_path/'a/capped_allocation/trades.csv').iloc[0]
     assert pd.Timestamp(trade.timestamp)==index[51]
     assert float(trade.market_price_usd)==151
     frame.loc[index[70]:,'close']=1e9
-    assert trading_baselines(frame,start=start,end=end,output=tmp_path/'b')==first
-    with pytest.raises(FileExistsError):trading_baselines(frame,start=start,end=end,output=tmp_path/'a')
+    assert trading_baselines(frame,start=start,end=end,output=tmp_path/'b',**options)==first
+    with pytest.raises(FileExistsError):trading_baselines(frame,start=start,end=end,output=tmp_path/'a',**options)
 
 
 def test_json_missing_metrics_are_null():
     assert json.dumps(json_safe({'a':[float('nan'),float('inf'),.5]}),allow_nan=False)=='{"a": [null, null, 0.5]}'
+
+
+def test_baseline_without_explicit_risk_configuration_fails_closed(tmp_path):
+    index=pd.date_range('2026-01-01',periods=80,tz='UTC')
+    frame=pd.DataFrame({'open':[100+i for i in range(80)],'close':[100.5+i for i in range(80)]},index=index)
+    start,end=str(index[50].date()),str(index[60].date())
+    result=trading_baselines(frame,start=start,end=end,output=tmp_path/'missing')
+    assert all(item['trade_count']==0 for item in result)
+    reasons=pd.read_csv(tmp_path/'missing'/'capped_allocation'/'risk_decisions.csv')
+    assert set(reasons['status'])=={'blocked'}
+    assert all('risk gateway' in reason.lower() for reason in reasons['reason'])
+    with pytest.raises(ValueError,match='synthetic'):
+        trading_baselines(frame,start=start,end=end,output=tmp_path/'bad',risk_probability='.5')
+    with pytest.raises(ValueError,match='Uncapped'):
+        trading_baselines(frame,start=start,end=end,output=tmp_path/'bad',capped=False)

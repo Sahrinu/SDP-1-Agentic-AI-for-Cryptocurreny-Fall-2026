@@ -13,7 +13,8 @@ from pathlib import Path
 import pandas as pd
 
 from risk.gateway import execute_guarded
-from risk.circuit_breaker import CircuitBreaker, constrained_action
+from risk.durable_gateway import RiskGateway, RiskPolicy
+from risk.circuit_breaker import constrained_action
 from execution.paper_trading import PaperTrader
 
 METHODS = ("exchange", "vote", "average")
@@ -28,6 +29,9 @@ class TradingPolicy:
     initial_cash: str = "10000"
     fee_rate: str = "0.001"
     slippage_bps: str = "5"
+    risk_policy: RiskPolicy | None = None
+    previous_forecast: float | None = None
+    buy_fraction: str | None = None
 
     def __post_init__(self):
         if not (0 <= self.sell_threshold < 0.5 < self.buy_threshold <= 1):
@@ -115,9 +119,20 @@ def replay_portfolios(prices, forecasts, attacks, output, *, policy=None, synthe
             trader = PaperTrader(policy.initial_cash, fee_rate=policy.fee_rate,
                                  slippage_bps=policy.slippage_bps)
             decisions, equity_rows = [], []
-            breaker = CircuitBreaker()
             first = forecasts.index[0]
             final = forecasts.index[-1] + pd.Timedelta(days=1)
+            folder = out / scenario / method
+            configured = (isinstance(policy.risk_policy, RiskPolicy) and
+                          policy.previous_forecast is not None and policy.buy_fraction is not None)
+            gateway = None
+            if configured:
+                folder.mkdir(parents=True, exist_ok=True)
+                state_path = folder / "risk_state.sqlite3"
+                RiskGateway.initialize_state(state_path, policy=policy.risk_policy, trader=trader,
+                    actor="replay", reason="Initialize a new replay account",
+                    timestamp=first.tz_localize("UTC").to_pydatetime(),
+                    previous_forecast=policy.previous_forecast)
+                gateway = RiskGateway(trader, policy.risk_policy, state_path=state_path)
             for day, candle in prices.loc[first:final].iterrows():
                 decision_day = day - pd.Timedelta(days=1)
                 if decision_day in forecasts.index:
@@ -129,22 +144,27 @@ def replay_portfolios(prices, forecasts, attacks, output, *, policy=None, synthe
                         probability = attack["attacked"] if comparable else None
                     action = policy.action(probability)
                     requested = action
-                    status = {"halted":False,"reason":"disabled for this replay policy"}
+                    available = probability is not None and not pd.isna(probability)
                     if policy.circuit_breaker:
-                        equity = trader.summary(str(candle[execution_field]))["equity_usd"]
-                        available = probability is not None and not pd.isna(probability)
-                        status = breaker.check(equity, probability if available else None)
                         participants = forecasts.loc[decision_day].get("available_agents", 0)
                         if attack is not None:
                             participants = len(json.loads(attack.get("attacked_active_agents", "[]")))
-                        action = constrained_action(action,halted=status["halted"],
-                            audit_passed=available and comparable,cap_feasible=participants >= 5)
-                    # A daily open is at 00:00 UTC; a close is at the following
-                    # midnight. The supplied slippage models adverse execution.
+                        action = constrained_action(action, audit_passed=available and comparable,
+                                                    cap_feasible=participants >= 5)
+                    # Never invent breaker thresholds, a forecast baseline or an order size.
+                    # An unconfigured trader fails closed through the same public entry point.
                     when = day if execution_field == "open" else day + pd.Timedelta(days=1)
+                    available = probability is not None and not pd.isna(probability)
                     approval, trade = execute_guarded(
-                        trader, action, str(candle[execution_field]), timestamp=when.tz_localize("UTC").to_pydatetime(),
+                        trader, action, str(candle[execution_field]),
+                        requested_buy_fraction=policy.buy_fraction if configured else "1",
+                        probability_up=probability if available and comparable else None,
+                        timestamp=when.tz_localize("UTC").to_pydatetime(),
                     )
+                    outcome = trader.last_risk_outcome or {}
+                    status = {"halted": bool(outcome.get("breaker_halted")),
+                              "reason": outcome.get("reason") or
+                              "Explicit risk policy, previous forecast and buy fraction required"}
                     decisions.append({
                         "decision_date": str(decision_day.date()), "execution_date": str(day.date()),
                         "execution_time": when.tz_localize("UTC").isoformat(),
@@ -159,7 +179,8 @@ def replay_portfolios(prices, forecasts, attacks, output, *, policy=None, synthe
                 exposure = trader.btc * Decimal(str(candle["close"])) / Decimal(account["equity_usd"])
                 equity_rows.append({"date": str(day.date()), **account, "btc_exposure": str(exposure),
                                     "over_cap_at_close": exposure > Decimal("0.25")})
-            folder = out / scenario / method
+            if gateway is not None:
+                gateway.close()
             trader.export(folder, str(prices.loc[final, "close"]))
             pd.DataFrame(decisions).to_csv(folder / "risk_decisions.csv", index=False)
             pd.DataFrame(equity_rows).to_csv(folder / "equity.csv", index=False)
@@ -174,5 +195,5 @@ def replay_portfolios(prices, forecasts, attacks, output, *, policy=None, synthe
         "attack_design": "local interventions using clean forecast and coin history",
         "state": "fresh independent accounts per replay; exports do not resume a live account",
         "risk": "25% checked at execution quotes; intraday price drift can exceed it between checks",
-    }, indent=2) + "\n", encoding="utf-8")
+    }, indent=2, default=str) + "\n", encoding="utf-8")
     return pd.DataFrame(summaries)

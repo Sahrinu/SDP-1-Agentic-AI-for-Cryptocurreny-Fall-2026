@@ -7,6 +7,7 @@ import random
 import pandas as pd
 from execution.paper_trading import PaperTrader
 from risk.gateway import execute_guarded
+from risk.durable_gateway import RiskGateway, RiskPolicy
 
 
 def paired_brier(probabilities, outcomes, *, repeats=1000,block_size=7,seed=42):
@@ -35,14 +36,22 @@ def paired_brier(probabilities, outcomes, *, repeats=1000,block_size=7,seed=42):
         'limitation':'Small samples and regime changes can make intervals unreliable'}
 
 
-def trading_baselines(prices, *, start,end,output,execution='next_open', capped=True):
+def trading_baselines(prices, *, start,end,output,execution='next_open', capped=True,
+                      risk_policy=None, previous_forecast=None, buy_fraction=None,
+                      risk_probability=None, synthetic=False):
     """Signals use D close and execute on D+1. SMA has 50 completed-day warmup.
 
-    Both variants use identical fees/slippage. Capped buy-and-hold may be fully
-    liquidated by the gateway on price drift, so it is explicitly named a
-    capped allocation strategy rather than conventional buy-and-hold.
+    Execution requires explicit risk policy, previous forecast and sizing.
+    A synthetic guard probability may be supplied only for synthetic scenarios;
+    it is not a model forecast. Real baselines without a forecast abstain.
+    The 25% cap cannot be disabled by this paper-execution path.
     """
     if execution not in {'next_open','next_close'}:raise ValueError('Unknown execution convention')
+    if not capped:raise ValueError('Uncapped paper execution is unavailable under the 25% risk cap')
+    if risk_probability is not None and synthetic is not True:
+        raise ValueError('A synthetic guard probability requires synthetic=True')
+    if risk_policy is not None and not isinstance(risk_policy,RiskPolicy):
+        raise ValueError('Explicit RiskPolicy required')
     frame=prices.copy();frame.index=pd.to_datetime(frame.index,utc=True).normalize();frame=frame.sort_index()
     if frame.empty or frame.index.has_duplicates or any((b-a).days!=1 for a,b in zip(frame.index,frame.index[1:])):
         raise ValueError('Need unique consecutive daily candles')
@@ -60,24 +69,43 @@ def trading_baselines(prices, *, start,end,output,execution='next_open', capped=
     if out.exists() and any(out.iterdir()):raise FileExistsError('Choose an empty baseline output directory')
     summaries=[]
     for name in ('capped_allocation' if capped else 'buy_and_hold','sma20_50'):
-        account=PaperTrader();curve=[]
+        account=PaperTrader();curve=[];risk_rows=[]
+        folder=out/name
+        complete=(risk_policy is not None and previous_forecast is not None and buy_fraction is not None and risk_probability is not None)
+        gateway=None
+        if complete:
+            folder.mkdir(parents=True,exist_ok=False)
+            state=folder/'risk_state.sqlite3'
+            RiskGateway.initialize_state(state,policy=risk_policy,trader=account,
+                actor='synthetic-baseline',reason='Initialize synthetic baseline',
+                timestamp=(first-pd.Timedelta(seconds=1)).to_pydatetime(),previous_forecast=previous_forecast)
+            gateway=RiskGateway(account,risk_policy,state_path=state)
         for day in dates:
             following=day+pd.Timedelta(days=1);price=float(frame.loc[following,field])
             action=('BUY' if day==first else 'HOLD') if name!='sma20_50' else ('BUY' if short.loc[day]>long.loc[day] else 'SELL')
             stamp=following if execution=='next_open' else following+pd.Timedelta(days=1)
-            if capped:execute_guarded(account,action,price,timestamp=stamp.to_pydatetime())
-            else:
-                # Fully allocated SMA holds until its signal changes; do not buy repeatedly.
-                if action=='BUY' and account.btc:action='HOLD'
-                account.execute(action,price,timestamp=stamp.to_pydatetime())
+            if action=='BUY' and name!='sma20_50' and day!=first:action='HOLD'
+            _,trade=execute_guarded(account,action,price,timestamp=stamp.to_pydatetime(),
+                requested_buy_fraction=buy_fraction if buy_fraction is not None else '1',
+                probability_up=risk_probability,
+                explanation='Synthetic guard input; not a model forecast' if synthetic else None)
+            risk_rows.append({'decision_date':str(day.date()), 'execution_time':stamp.isoformat(),
+                'requested_action':action,'status':(account.last_risk_outcome or {}).get('status'),
+                'reason':(account.last_risk_outcome or {}).get('reason'), 'traded':trade is not None})
             curve.append({'date':str(following.date()),**account.summary(frame.loc[following,'close'])})
-        folder=out/name;account.export(folder,frame.loc[last+pd.Timedelta(days=1),'close'])
+        account.export(folder,frame.loc[last+pd.Timedelta(days=1),'close'])
+        pd.DataFrame(risk_rows).to_csv(folder/'risk_decisions.csv',index=False)
+        if gateway is not None:gateway.close()
         pd.DataFrame(curve).to_csv(folder/'equity.csv',index=False)
         summaries.append({'method':name,'capped':capped,**curve[-1]})
     out.mkdir(parents=True,exist_ok=True)
     (out/'run.json').write_text(json.dumps({'execution':execution,'cap':.25 if capped else None,
         'fee':.001,'slippage_bps':5,'timing':'D close signal, D+1 execution',
-        'capped_buy_hold':'Single initial buy; gateway may liquidate an overweight position; no reinvestment'},indent=2))
+        'synthetic':synthetic,'risk_probability':risk_probability,
+        'risk_probability_note':'Synthetic guard input, not a model forecast' if risk_probability is not None else 'No forecast provided; execution blocked',
+        'risk_policy':None if risk_policy is None else {'max_forecast_swing':str(risk_policy.max_forecast_swing),'max_cumulative_loss':str(risk_policy.max_cumulative_loss)},
+        'previous_forecast':previous_forecast,'buy_fraction':buy_fraction,
+        'capped_buy_hold':'Single initial buy; overweight holdings are not automatically liquidated; no reinvestment'},indent=2))
     pd.DataFrame(summaries).to_csv(out/'summary.csv',index=False)
     return summaries
 
