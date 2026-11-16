@@ -88,18 +88,23 @@ def approve_trade(action, *, cash_usd, btc, btc_price_usd, requested_buy_fractio
                         "BUY limited to 25% of post-cost portfolio equity")
 
 
-def execute_guarded(trader, action, btc_price_usd, *, requested_buy_fraction="1", timestamp=None):
-    """Read actual account/costs, approve, and immediately execute the same quote.
+def execute_guarded(trader, action, btc_price_usd, *, requested_buy_fraction="1", timestamp=None,
+                    probability_up=None, explanation=None):
+    """Submit the exact request once through the bound durable gateway.
 
-    Use this instead of trader.execute() in the final team decision pipeline.
-    Returns (RiskDecision, Trade | None). No exchange connection is made.
+    `approve_trade` remains available for legacy sizing previews, but paper
+    execution must not resize a request or turn HOLD into a liquidation.
     """
-    decision = approve_trade(
-        action, cash_usd=trader.cash, btc=trader.btc, btc_price_usd=btc_price_usd,
-        requested_buy_fraction=requested_buy_fraction, fee_rate=trader.fee_rate,
-        slippage_bps=trader.slippage * Decimal("10000"),
-    )
-    trade = trader.execute(decision.action, btc_price_usd,
-                           buy_fraction=decision.buy_fraction if decision.action == "BUY" else "1",
-                           timestamp=timestamp)
+    trade = trader.execute(action, btc_price_usd,
+                           buy_fraction=requested_buy_fraction if action == "BUY" else "1",
+                           timestamp=timestamp, probability_up=probability_up, explanation=explanation)
+    outcome = trader.last_risk_outcome or {}
+    reason = str(outcome.get("reason") or "No paper trade was executed")
+    after = outcome.get("btc_exposure_after")
+    before = outcome.get("btc_exposure_before")
+    exposure_before = Decimal(before) if before is not None else ZERO
+    exposure = Decimal(after) if after is not None else exposure_before
+    decision = RiskDecision(action if trade is not None else "HOLD",
+                            _number(requested_buy_fraction, "requested fraction") if trade is not None and action == "BUY" else ZERO,
+                            exposure_before, exposure, reason)
     return decision, trade

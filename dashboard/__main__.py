@@ -121,11 +121,11 @@ def create_server(port=8765, *, root=ROOT, bind=True):
             if not self.valid_host():
                 return self.respond(403,{'error':'Invalid host'})
             if self.path == '/':
-                return self.respond(200,(Path(__file__).with_name('index.html')).read_text().replace('__TOKEN__',token),'text/html')
+                return self.respond(200,(Path(__file__).with_name('index.html')).read_text(encoding='utf-8').replace('__TOKEN__',token),'text/html')
             assets = {'/app.js':('app.js','text/javascript'), '/styles.css':('styles.css','text/css')}
             if self.path in assets:
                 name,kind = assets[self.path]
-                return self.respond(200,Path(__file__).with_name(name).read_text(),kind)
+                return self.respond(200,Path(__file__).with_name(name).read_text(encoding='utf-8'),kind)
             if self.path == '/api/market':
                 with lock:
                     payload = market_snapshot(data,state['sources'])

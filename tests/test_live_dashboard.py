@@ -7,6 +7,8 @@ import pytest
 from agents import chart,long_term,network,miner
 from agents._shared import cutoff_for,daily_prices
 from dashboard.service import forecast_snapshot,PaperStore
+from execution.paper_trading import PaperTrader
+from risk.durable_gateway import RiskGateway, RiskPolicy
 from risk.circuit_breaker import CircuitBreaker,constrained_action
 from risk.auditor import audit_forecast
 from market_data.live import collect_chain,reference_quote
@@ -79,16 +81,22 @@ def paper_forecast():
 
 
 def test_paper_idempotence_and_cost_aware_cap(tmp_path):
-    store=PaperStore(tmp_path/'paper.db');f=paper_forecast()
+    policy=RiskPolicy('.3','.1')  # synthetic offline thresholds
+    state=tmp_path/'risk.sqlite3'
+    RiskGateway.initialize_state(state,policy=policy,trader=PaperTrader(),actor='test',
+        reason='synthetic test',timestamp=NOW-timedelta(minutes=1),previous_forecast='.5')
+    store=PaperStore(tmp_path/'paper.db',risk_policy=policy,risk_state_path=state,buy_fraction='.24')
+    f=paper_forecast()
     first=store.decide(f,now=NOW)
     assert first['risk']['action']=='BUY'
     assert float(first['risk']['projected_exposure'])<=.25
     assert float(first['portfolio']['total_fees_usd'])>0
     assert PaperStore(tmp_path/'paper.db').decide(f,now=NOW)==first
     f['id']='next';f['methods']['exchange']=.1
-    second=store.decide(f,now=NOW)
+    second=store.decide(f,now=NOW+timedelta(seconds=1))
     assert second['breaker']['halted']
-    assert second['risk']['action']=='SELL' and second['portfolio']['btc']=='0'
+    assert second['risk']['action']=='HOLD' and second['portfolio']['btc']==first['portfolio']['btc']
+    assert second['trade'] is None
 
 
 def test_cap_infeasible_blocks_new_buy(tmp_path):

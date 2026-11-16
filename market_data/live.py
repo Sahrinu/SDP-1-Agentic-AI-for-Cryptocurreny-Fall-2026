@@ -94,10 +94,17 @@ def collect_snapshot(directory, *, input_directory=None):
     def macro():
         from market_data.macro import collect
         end = now().date() - timedelta(days=1)
-        frame = collect(end-timedelta(days=60), end, output=directory/'macro.csv')
-        # Live receipt, not the historical assumed midnight, determines eligibility.
+        frame = collect(end-timedelta(days=60), end, output=directory/'macro.csv', clock=now)
+        # Use the completed download time for the whole retrieved vintage; it is
+        # not a provider publication timestamp or historical availability proof.
+        receipts = frame['retrieval_completed_at'].dropna().unique()
+        if len(receipts) != 1:
+            raise ValueError('Macro retrieval completion timestamp is missing or inconsistent')
+        receipt = pd.Timestamp(receipts[0])
+        if receipt.tzinfo is None:
+            raise ValueError('Macro retrieval completion timestamp must be timezone-aware')
         for field in ('dxy','treasury_10y'):
-            frame[field+'_available_at'] = now().isoformat()
+            frame[field+'_available_at'] = receipt.tz_convert('UTC').isoformat()
         frame['availability_basis'] = 'retrieved_vintage_live_only'
         return frame
     value = attempt('macro', macro)

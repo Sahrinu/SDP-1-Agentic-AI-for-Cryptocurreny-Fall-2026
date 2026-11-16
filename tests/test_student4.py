@@ -17,6 +17,7 @@ from urllib.parse import parse_qs, urlparse
 from student4 import CoinGeckoClient, DataError, PaperTrader, StablecoinAgent, StablecoinSnapshot
 from student4.data import COINS
 from student4.peg import derive_depeg_signal
+from risk.durable_gateway import RiskGateway, RiskPolicy
 
 NOW = datetime(2026, 1, 2, 12, tzinfo=timezone.utc)
 
@@ -203,26 +204,40 @@ class AgentTests(unittest.TestCase):
 
 
 class PaperTradingTests(unittest.TestCase):
+    def setUp(self):
+        self.folder = tempfile.TemporaryDirectory()
+        self.addCleanup(self.folder.cleanup)
+
+    def configured(self, trader):
+        policy = RiskPolicy("0.5", "0.5")  # synthetic test thresholds
+        path = Path(self.folder.name) / "risk.sqlite3"
+        RiskGateway.initialize_state(path, policy=policy, trader=trader,
+                                     actor="synthetic-test", reason="test setup",
+                                     timestamp=NOW - timedelta(days=1), previous_forecast="0.5")
+        gateway = RiskGateway(trader, policy, state_path=path)
+        self.addCleanup(gateway.close)
+        return trader
+
     def test_exact_no_cost_round_trip(self):
-        trader = PaperTrader("1000", fee_rate=0, slippage_bps=0)
-        trader.execute("BUY", "100", timestamp=NOW)
-        self.assertEqual(trader.btc, Decimal("10"))
-        self.assertEqual(trader.cash, 0)
-        self.assertEqual(Decimal(trader.summary("110")["unrealized_pnl_usd"]), 100)
-        trader.execute("SELL", "110", timestamp=NOW + timedelta(hours=1))
-        self.assertEqual(trader.cash, 1100)
+        trader = self.configured(PaperTrader("1000", fee_rate=0, slippage_bps=0))
+        trader.execute("BUY", "100", buy_fraction="0.25", timestamp=NOW, probability_up="0.5")
+        self.assertEqual(trader.btc, Decimal("2.5"))
+        self.assertEqual(trader.cash, 750)
+        self.assertEqual(Decimal(trader.summary("110")["unrealized_pnl_usd"]), 25)
+        trader.execute("SELL", "110", timestamp=NOW + timedelta(hours=1), probability_up="0.5")
+        self.assertEqual(trader.cash, 1025)
         self.assertEqual(trader.btc, 0)
         self.assertEqual(trader.cost_basis, 0)
-        self.assertEqual(trader.realized_pnl, 100)
-        self.assertEqual(Decimal(trader.summary("110")["total_pnl_usd"]), 100)
+        self.assertEqual(trader.realized_pnl, 25)
+        self.assertEqual(Decimal(trader.summary("110")["total_pnl_usd"]), 25)
 
     def test_fees_slippage_and_pnl_reconcile(self):
-        trader = PaperTrader("1000", fee_rate="0.01", slippage_bps="100")
-        buy = trader.execute("BUY", "100", timestamp=NOW)
+        trader = self.configured(PaperTrader("1000", fee_rate="0.01", slippage_bps="100"))
+        buy = trader.execute("BUY", "100", buy_fraction="0.24", timestamp=NOW, probability_up="0.5")
         self.assertEqual(Decimal(buy.execution_price_usd), 101)
         self.assertGreaterEqual(trader.cash, 0)
         self.assertEqual(trader.cash + trader.cost_basis, trader.initial_cash)
-        sell = trader.execute("SELL", "100", timestamp=NOW + timedelta(hours=1))
+        sell = trader.execute("SELL", "100", timestamp=NOW + timedelta(hours=1), probability_up="0.5")
         self.assertEqual(Decimal(sell.execution_price_usd), 99)
         self.assertLess(trader.realized_pnl, 0)
         self.assertEqual(trader.cash - trader.initial_cash, trader.realized_pnl)
@@ -230,27 +245,30 @@ class PaperTradingTests(unittest.TestCase):
         self.assertEqual(Decimal(trader.summary("100")["unrealized_pnl_usd"]), 0)
 
     def test_sizing_repeated_buys_and_total_cost_basis(self):
-        trader = PaperTrader("1000", fee_rate=0, slippage_bps=0)
-        trader.execute("BUY", "100", buy_fraction="0.25", timestamp=NOW)
-        self.assertEqual(trader.cash, 750)
-        trader.execute("BUY", "150", timestamp=NOW + timedelta(hours=1))
-        self.assertEqual(trader.btc, Decimal("7.5"))
-        self.assertEqual(trader.cost_basis, 1000)
+        trader = self.configured(PaperTrader("1000", fee_rate=0, slippage_bps=0))
+        trader.execute("BUY", "100", buy_fraction="0.10", timestamp=NOW, probability_up="0.5")
+        self.assertEqual(trader.cash, 900)
+        trader.execute("BUY", "150", buy_fraction="0.10", timestamp=NOW + timedelta(hours=1), probability_up="0.5")
+        self.assertEqual(trader.btc, Decimal("1.6"))
+        self.assertEqual(trader.cost_basis, 190)
         summary = trader.summary("120")
-        self.assertEqual(Decimal(summary["total_pnl_usd"]), -100)
+        self.assertEqual(Decimal(summary["total_pnl_usd"]), 2)
         self.assertEqual(Decimal(summary["total_pnl_usd"]),
                          Decimal(summary["realized_pnl_usd"]) + Decimal(summary["unrealized_pnl_usd"]))
 
     def test_hold_no_position_sell_and_insufficient_cash_are_noops(self):
-        trader = PaperTrader(fee_rate=0, slippage_bps=0)
-        self.assertIsNone(trader.execute("HOLD", "100"))
-        self.assertIsNone(trader.execute("SELL", "100"))
-        trader.execute("BUY", "100")
-        self.assertIsNone(trader.execute("BUY", "100"))
+        trader = self.configured(PaperTrader(fee_rate=0, slippage_bps=0))
+        self.assertIsNone(trader.execute("HOLD", "100", timestamp=NOW, probability_up="0.5"))
+        self.assertIsNone(trader.execute("SELL", "100", timestamp=NOW, probability_up="0.5"))
+        trader.execute("BUY", "100", buy_fraction="0.25", timestamp=NOW, probability_up="0.5")
+        before = (trader.cash, trader.btc, list(trader.trades))
+        self.assertIsNone(trader.execute("BUY", "100", timestamp=NOW + timedelta(seconds=1), probability_up="0.5"))
+        self.assertEqual((trader.cash, trader.btc, trader.trades), before)
+        self.assertEqual(trader.last_risk_outcome["status"], "blocked")
         self.assertEqual(len(trader.trades), 1)
 
     def test_invalid_orders_leave_account_unchanged(self):
-        trader = PaperTrader()
+        trader = self.configured(PaperTrader())
         before = trader.summary(100)
         for action, price, fraction in (("WAIT", 100, 1), ("BUY", 0, 1), ("BUY", "NaN", 1),
                                         ("BUY", True, 1), ("BUY", 100, 0), ("BUY", 100, "1.1")):
@@ -259,13 +277,23 @@ class PaperTradingTests(unittest.TestCase):
             self.assertEqual(trader.summary(100), before)
 
     def test_trade_timestamps_must_be_aware_and_ordered(self):
-        trader = PaperTrader()
+        trader = self.configured(PaperTrader())
         with self.assertRaises(ValueError):
             trader.execute("BUY", 100, timestamp=NOW.replace(tzinfo=None))
-        trader.execute("BUY", 100, timestamp=NOW)
+        trader.execute("BUY", 100, buy_fraction="0.24", timestamp=NOW, probability_up="0.5")
         with self.assertRaises(ValueError):
             trader.execute("SELL", 100, timestamp=NOW - timedelta(seconds=1))
         self.assertEqual(len(trader.trades), 1)
+
+    def test_unconfigured_public_execution_fails_closed(self):
+        trader = PaperTrader()
+        before = (trader.cash, trader.btc, list(trader.trades))
+        self.assertIsNone(trader.execute("BUY", 100, timestamp=NOW, probability_up="0.6"))
+        self.assertEqual((trader.cash, trader.btc, trader.trades), before)
+        self.assertEqual(trader.last_risk_outcome["status"], "blocked")
+        self.assertIn("risk gateway", trader.last_risk_outcome["reason"])
+        with self.assertRaises(PermissionError):
+            trader._execute_approved("BUY", 100, timestamp=NOW)
 
     def test_invalid_account_settings(self):
         for kwargs in ({"initial_cash": 0}, {"fee_rate": 1}, {"slippage_bps": 10000},
@@ -274,8 +302,8 @@ class PaperTradingTests(unittest.TestCase):
                 PaperTrader(**kwargs)
 
     def test_ledger_export(self):
-        trader = PaperTrader()
-        trader.execute("BUY", 100, timestamp=NOW)
+        trader = self.configured(PaperTrader())
+        trader.execute("BUY", 100, buy_fraction="0.24", timestamp=NOW, probability_up="0.5")
         with tempfile.TemporaryDirectory() as folder:
             trader.export(folder, 100)
             with (Path(folder) / "trades.csv").open(newline="", encoding="utf-8") as handle:
@@ -287,10 +315,19 @@ class PaperTradingTests(unittest.TestCase):
 
 
 class CLITests(unittest.TestCase):
+    @staticmethod
+    def child_environment():
+        # pytest adds compat to its own import path; child processes need the
+        # same repository-local package layout explicitly.
+        root = Path(__file__).resolve().parents[1]
+        env = os.environ.copy()
+        env["PYTHONPATH"] = os.pathsep.join(filter(None, [str(root / "compat"), str(root), env.get("PYTHONPATH")]))
+        return env
+
     def test_demo_runs_without_network_or_key(self):
         with tempfile.TemporaryDirectory() as folder:
             result = subprocess.run([sys.executable, "-m", "student4", "demo", "--output", folder],
-                                    capture_output=True, text=True, check=False)
+                                    capture_output=True, text=True, env=self.child_environment(), check=False)
             self.assertEqual(result.returncode, 0, result.stderr)
             signals = json.loads((Path(folder) / "signals.json").read_text())
             self.assertEqual([s["action"] for s in signals], ["HOLD", "BUY", "HOLD", "SELL"])
@@ -299,11 +336,23 @@ class CLITests(unittest.TestCase):
             self.assertEqual(Decimal(portfolio["btc"]), 0)
             self.assertEqual(len(list((Path(folder) / "snapshots").glob("*.json"))), 4)
             self.assertIn("synthetic", result.stdout)
+            self.assertEqual([s["risk_outcome"]["status"] for s in signals],
+                             ["no_trade", "executed", "no_trade", "executed"])
+            events = json.loads((Path(folder) / "activity.json").read_text())
+            self.assertEqual(sum(e["status"] == "executed" for e in events if e["kind"] == "paper_execution"), 2)
+            self.assertTrue((Path(folder) / "activity.html").exists())
+            metadata = json.loads((Path(folder) / "scenario_metadata.json").read_text())
+            self.assertIn("synthetic", metadata["breaker_threshold_source"])
+            rerun = subprocess.run([sys.executable, "-m", "student4", "demo", "--output", folder],
+                                   capture_output=True, text=True, env=self.child_environment(), check=False)
+            self.assertEqual(rerun.returncode, 1)
+            self.assertIn("never reset", rerun.stderr)
 
     def test_collect_without_key_has_clear_error_and_no_output(self):
         with tempfile.TemporaryDirectory() as folder:
             target = Path(folder) / "current.json"
-            env = {k: v for k, v in os.environ.items() if k != "COINGECKO_DEMO_API_KEY"}
+            env = self.child_environment()
+            env.pop("COINGECKO_DEMO_API_KEY", None)
             result = subprocess.run([sys.executable, "-m", "student4", "collect", "--output", str(target)],
                                     capture_output=True, text=True, env=env, check=False)
             self.assertEqual(result.returncode, 1)

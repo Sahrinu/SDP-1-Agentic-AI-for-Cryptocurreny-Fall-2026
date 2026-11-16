@@ -6,6 +6,11 @@ import pandas as pd
 import pytest
 
 from experiments.paper import TradingPolicy, replay_portfolios
+from risk.durable_gateway import RiskPolicy
+
+
+def synthetic_policy(**kwargs):
+    return TradingPolicy(risk_policy=RiskPolicy('.9','.9'), previous_forecast=.5, buy_fraction='.24', **kwargs)
 
 
 @pytest.fixture
@@ -25,7 +30,7 @@ def test_policy(probability, expected):
 
 def test_next_open_timing_independent_accounts_and_costs(tmp_path, inputs):
     prices, forecasts = inputs
-    summary = replay_portfolios(prices, forecasts, None, tmp_path)
+    summary = replay_portfolios(prices, forecasts, None, tmp_path, policy=synthetic_policy(), synthetic=True)
     folder = tmp_path / "clean" / "exchange"
     trades = pd.read_csv(folder / "trades.csv")
     assert trades.iloc[0].market_price_usd == 120  # next open, not signal close 100
@@ -34,7 +39,8 @@ def test_next_open_timing_independent_accounts_and_costs(tmp_path, inputs):
     assert trades.iloc[0].fee_usd > 0
     decisions = pd.read_csv(folder / "risk_decisions.csv")
     assert (pd.to_datetime(decisions.execution_date) > pd.to_datetime(decisions.decision_date)).all()
-    assert (decisions.projected_exposure <= 0.25).all()
+    assert (decisions.loc[decisions.traded, "projected_exposure"] <= 0.25).all()
+    assert (decisions.loc[~decisions.traded, "action"] == "HOLD").all()
     other = summary.set_index("method").loc["vote"]
     assert float(other.equity_usd) == 10000 and other.trade_count == 0
     equity = pd.read_csv(folder / "equity.csv")
@@ -49,7 +55,7 @@ def test_close_only_requires_explicit_fallback(tmp_path, inputs):
         replay_portfolios(prices.drop(columns="open"), forecasts, None, tmp_path)
     assert list(tmp_path.iterdir()) == []
     replay_portfolios(prices.drop(columns="open"), forecasts, None, tmp_path,
-                      policy=TradingPolicy(execution="next_close"))
+                      policy=synthetic_policy(execution="next_close"), synthetic=True)
     trades = pd.read_csv(tmp_path / "clean" / "exchange" / "trades.csv")
     assert trades.iloc[0].market_price_usd == 130
     assert trades.iloc[0].timestamp.startswith("2026-10-03T00:00")
@@ -61,7 +67,7 @@ def test_attack_accounts_are_separate_and_noncomparable_abstains(tmp_path, input
         {"date": "2026-10-01", "method": "exchange", "attacked": 0.2, "comparable": True},
         {"date": "2026-10-02", "method": "exchange", "attacked": 0.9, "comparable": False},
     ])
-    summary = replay_portfolios(prices, forecasts, attacks, tmp_path)
+    summary = replay_portfolios(prices, forecasts, attacks, tmp_path, policy=synthetic_policy(), synthetic=True)
     assert len(summary) == 6
     decisions = pd.read_csv(tmp_path / "attacked" / "exchange" / "risk_decisions.csv")
     assert decisions.iloc[0].requested_action == "SELL"
@@ -111,9 +117,20 @@ def test_runner_connects_real_components_and_does_not_expose_future(tmp_path):
         "    return {'p_up': 0.8, 'data_missing': False}\n"
     )
     result = run("2026-10-01", "2026-10-03", 0, data, agents, tmp_path / "results",
-                 paper_policy=TradingPolicy(), synthetic=True)
+                 paper_policy=synthetic_policy(), synthetic=True)
     assert len(result) == 4  # preserve existing runner's return contract
     summary = pd.read_csv(tmp_path / "results" / "paper" / "summary.csv")
     assert set(summary.method) == {"exchange", "vote", "average"}
     assert (summary.trade_count > 0).all()
     assert json.loads((tmp_path / "results" / "paper" / "run.json").read_text())["synthetic"]
+
+
+def test_circuit_breaker_flag_preserves_main_participation_guard(tmp_path, inputs):
+    prices, forecasts = inputs
+    forecasts['available_agents'] = 1
+    replay_portfolios(prices, forecasts, None, tmp_path,
+                      policy=synthetic_policy(circuit_breaker=True), synthetic=True)
+    decisions = pd.read_csv(tmp_path / 'clean' / 'exchange' / 'risk_decisions.csv')
+    assert decisions.iloc[0].requested_action == 'BUY'
+    assert decisions.iloc[0].constrained_action == 'HOLD'
+    assert not decisions.iloc[0].traded

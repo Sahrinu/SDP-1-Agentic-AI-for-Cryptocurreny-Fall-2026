@@ -55,13 +55,27 @@ def align_daily(series, start, end):
     return out
 
 
-def collect(start, end, *, output="data/macro.csv", downloader=None, now=None):
-    now = pd.Timestamp(now if now is not None else datetime.now(timezone.utc))
-    if now.tzinfo is None:
-        raise ValueError("now must include a timezone")
-    now = now.tz_convert("UTC")
+def collect(start, end, *, output="data/macro.csv", downloader=None, now=None, clock=None):
+    """Download daily bars; record actual collection start and completion.
+
+    ``now`` is an optional date-validation reference, not a retrieval time.
+    ``clock`` is an optional injectable UTC clock for offline tests. Historical
+    availability is an assumption and Yahoo publication times are not recorded.
+    """
+    if clock is not None and not callable(clock):
+        raise ValueError("clock must be callable")
+    current = clock if clock is not None else lambda: datetime.now(timezone.utc)
+
+    def instant(value, name):
+        value = pd.Timestamp(value)
+        if pd.isna(value) or value.tzinfo is None:
+            raise ValueError(f"{name} must include a timezone")
+        return value.tz_convert("UTC")
+
+    started_at = instant(current(), "collection start")
+    reference_time = instant(now, "now") if now is not None else started_at
     start, end = pd.Timestamp(start).date(), pd.Timestamp(end).date()
-    if end < start or end >= now.tz_convert("UTC").date():
+    if end < start or end >= reference_time.date():
         raise ValueError("require start <= end and end before the current UTC day")
     if downloader is None:
         import yfinance as yf  # Optional network dependency; forecast never downloads.
@@ -79,7 +93,12 @@ def collect(start, end, *, output="data/macro.csv", downloader=None, now=None):
         series[field] = frame["Close"]
         raw[field] = [{"date": str(pd.Timestamp(i).date()), "close": float(v)}
                       for i, v in frame["Close"].dropna().items()]
+    completed_at = instant(current(), "retrieval completion")
+    if completed_at < started_at:
+        raise ValueError("retrieval completion precedes collection start")
     daily = align_daily(series, start, end)
+    daily["retrieval_completed_at"] = completed_at.isoformat()
+    daily["publication_basis"] = "not_recorded"
     # Validate both downloads before writing anything; never substitute fake data.
     if daily[list(SYMBOLS)].notna().sum().min() == 0:
         raise ValueError("no usable macro observations in the requested period")
@@ -87,9 +106,12 @@ def collect(start, end, *, output="data/macro.csv", downloader=None, now=None):
     destination.parent.mkdir(parents=True, exist_ok=True)
     archive = destination.parent / "macro_raw"
     archive.mkdir(exist_ok=True)
-    snapshot = archive / ("yahoo_" + now.strftime("%Y%m%dT%H%M%S%fZ") + ".json")
+    snapshot = archive / ("yahoo_" + completed_at.strftime("%Y%m%dT%H%M%S%fZ") + ".json")
     snapshot.write_text(json.dumps({
-        "retrieved_at": now.isoformat(), "symbols": SYMBOLS,
+        "collection_started_at": started_at.isoformat(),
+        "retrieval_completed_at": completed_at.isoformat(),
+        "retrieved_at": completed_at.isoformat(), "symbols": SYMBOLS,
+        "publication_basis": "not_recorded",
         "availability_basis": "assumed_next_UTC_midnight_not_verified_vintage",
         "yield_units": "percent as quoted by Yahoo ^TNX; no divide-by-ten conversion",
         "observations": raw,

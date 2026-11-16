@@ -398,7 +398,11 @@ if __name__ == "__main__":
     parser.add_argument("--paper", action="store_true", help="Connect forecasts to risk-approved paper portfolios")
     parser.add_argument("--execution", choices=["next_open", "next_close"], default="next_open",
                         help="next_open needs daily UTC open prices; next_close is a delayed fallback")
-    parser.add_argument("--circuit-breaker", action="store_true", help="Block new risk on drawdown/forecast jumps, missing inputs or fewer than five active agents")
+    parser.add_argument("--circuit-breaker", action="store_true", help="Also constrain new BUYs when fewer than five agents participate; durable risk settings are always required")
+    parser.add_argument("--risk-max-forecast-swing", type=float, help="Explicit durable breaker forecast-swing limit")
+    parser.add_argument("--risk-max-cumulative-loss", type=float, help="Explicit durable breaker loss limit")
+    parser.add_argument("--risk-previous-forecast", type=float, help="Explicit initial forecast baseline")
+    parser.add_argument("--paper-buy-fraction", help="Explicit fraction of available cash requested for each BUY")
     parser.add_argument("--buy-threshold", type=float, default=0.55)
     parser.add_argument("--sell-threshold", type=float, default=0.45)
     parser.add_argument("--synthetic", action="store_true", help="Label this run's data and agents as synthetic")
@@ -406,9 +410,19 @@ if __name__ == "__main__":
     extras = {}
     if args.paper:
         from experiments.paper import TradingPolicy
+        supplied = (args.risk_max_forecast_swing, args.risk_max_cumulative_loss,
+                    args.risk_previous_forecast, args.paper_buy_fraction)
+        if any(value is not None for value in supplied) and not all(value is not None for value in supplied):
+            parser.error("Paper risk requires both breaker limits, previous forecast and buy fraction")
+        policy = None
+        if all(value is not None for value in supplied):
+            from risk.durable_gateway import RiskPolicy
+            policy = RiskPolicy(args.risk_max_forecast_swing, args.risk_max_cumulative_loss)
         extras["paper_policy"] = TradingPolicy(
             buy_threshold=args.buy_threshold, sell_threshold=args.sell_threshold,
             execution=args.execution, circuit_breaker=args.circuit_breaker,
+            risk_policy=policy, previous_forecast=args.risk_previous_forecast,
+            buy_fraction=args.paper_buy_fraction,
         )
         extras["synthetic"] = args.synthetic
     if args.student2_inputs:

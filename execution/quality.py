@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from decimal import Decimal
 
-from risk.gateway import approve_trade, execute_guarded
+from risk.gateway import RiskDecision, approve_trade, execute_guarded
 from .paper_trading import decimal_value
 
 
@@ -17,18 +17,18 @@ class LiquidityQuote:
 
 
 def execute_with_quality(trader, action, btc_price_usd, *, quote=None,
-                         requested_buy_fraction="1", timestamp=None):
+                         requested_buy_fraction="1", timestamp=None, probability_up=None, explanation=None):
     """Return (risk decision, trade, quality reason).
 
     BUY requires fresh depth available at or below the simulator's adverse fill
-    price. SELL/HOLD, including mandatory liquidation, retain gateway behavior.
+    price. SELL and HOLD preserve the caller's requested action.
     The caller must aggregate depth only up to that price, not the entire book.
     """
     when = timestamp or datetime.now(timezone.utc)
     decision = approve_trade(action, cash_usd=trader.cash, btc=trader.btc,
         btc_price_usd=btc_price_usd, requested_buy_fraction=requested_buy_fraction,
         fee_rate=trader.fee_rate, slippage_bps=trader.slippage * Decimal("10000"))
-    if decision.action == "BUY":
+    if action == "BUY":
         try:
             if quote is None or when.tzinfo is None or quote.observed_at.tzinfo is None:
                 raise ValueError("Missing timestamped liquidity quote")
@@ -39,11 +39,17 @@ def execute_with_quality(trader, action, btc_price_usd, *, quote=None,
             depth = decimal_value(quote.ask_depth_btc, "depth", positive=True)
             price = decimal_value(btc_price_usd, "price", positive=True)
             fill = price * (1 + trader.slippage)
-            quantity = trader.cash * decision.buy_fraction / (fill * (1 + trader.fee_rate))
+            fraction = decimal_value(requested_buy_fraction, "requested fraction", positive=True)
+            if fraction > 1:
+                raise ValueError("Requested fraction exceeds one")
+            quantity = trader.cash * fraction / (fill * (1 + trader.fee_rate))
             if bid > ask or not bid <= price <= ask or ask > fill or depth < quantity:
                 raise ValueError("Spread or executable depth exceeds simulated cost budget")
         except (TypeError, ValueError, AttributeError) as exc:
-            return decision, None, f"DEFER: {exc}"
+            deferred = RiskDecision("HOLD", Decimal("0"), decision.exposure_before,
+                                    decision.exposure_before, f"DEFER: {exc}")
+            return deferred, None, deferred.reason
     approved, trade = execute_guarded(trader, action, btc_price_usd,
-        requested_buy_fraction=requested_buy_fraction, timestamp=when)
-    return approved, trade, "Passed execution checks" if trade else "No trade required"
+        requested_buy_fraction=requested_buy_fraction, timestamp=when,
+        probability_up=probability_up, explanation=explanation)
+    return approved, trade, "Passed execution checks" if trade else approved.reason
