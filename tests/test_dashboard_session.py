@@ -46,6 +46,13 @@ def test_forecast_reuses_recent_news_and_drops_it_after_failed_refetch(local_htt
     def forecast(data, quote, *, client, on_progress):
         seen.append(data)
         return {'id':'news-test-'+str(len(seen))}
+    books = []
+    def refresh_betting(data, directory):
+        book = {'capture':len(books), 'source':'injected unit test only'}
+        books.append(book)
+        data['student2_market_observation'] = book
+        return {'status':'collected'}
+    monkeypatch.setattr(live,'refresh_betting_inputs',refresh_betting)
     monkeypatch.setattr(live,'collect_snapshot',collect_snapshot)
     monkeypatch.setattr(live,'collect_news',collect_news)
     monkeypatch.setattr(live,'reference_quote',lambda:{'source':'unit-test-only'})
@@ -72,6 +79,7 @@ def test_forecast_reuses_recent_news_and_drops_it_after_failed_refetch(local_htt
     state = run('forecast')
     assert len(fetched) == 1 and 'student2_news_articles' not in seen[-1]
     assert state['sources']['news']['status'] == 'unavailable'
+    assert len(books) == 2 and seen[-1]['student2_market_observation'] == books[-1]
 
 @pytest.fixture
 def clean_env(monkeypatch):
@@ -233,6 +241,7 @@ def test_http_progress_is_visible_before_the_forecast_finishes(local_http,monkey
     entered,release=threading.Event(),threading.Event()
     monkeypatch.setattr(live,'reference_quote',lambda:{'source':'unit-test-only'})
     monkeypatch.setattr(live,'collect_news',lambda:[{'title':'Unit test BTC article'}])
+    monkeypatch.setattr(live,'refresh_betting_inputs',lambda *a,**kw:{'status':'unavailable','reason':'offline test'})
     def forecast(data,quote,*,client,on_progress):
         for index,spec in enumerate(CATALOG):
             on_progress({'event':'agent_started','role':spec.name})

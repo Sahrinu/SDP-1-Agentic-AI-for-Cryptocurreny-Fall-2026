@@ -229,7 +229,7 @@ the breaker is halted, and the gateway never forces a liquidation.
 | Mood | Alternative.me Fear & Greed | Daily readings plus Gemini; not a real-time social stream |
 | Stablecoin | CoinGecko | Local demo key; prospective same-source snapshots approximately 24h apart; no fabricated baseline |
 | ETF | Reviewed `data/etf_flows.csv` import | Complete sourced flows and real availability timestamps; ETF prices are not fund flows |
-| Betting odds | Existing validated Limitless capture tools | Still requires a fresh book and supported event rules; dashboard does not silently substitute REST payout prices |
+| Betting odds | Bounded public Limitless discovery and Socket.IO book capture immediately before forecasting | Validates frame/timestamps and calls the evidence model; abstains if no usable book arrives |
 
 DXY is an index, Yahoo is a provider, and FRED is another provider: they are not
 three equivalent data series. Yahoo dollar/yield proxies suit this prototype's
@@ -883,17 +883,93 @@ attack and a successful data download must not be described as final research
 results. Full-day evidence persistence beyond the runner's probability CSVs needs
 care; the sample new-agent demo saves its complete agent evidence explicitly.
 
+## Timestamped fake-news comparisons and actual Gemini responses
+
+The dashboard loads Gemini keys from a local `.env` at startup (existing environment values take
+precedence). Add `GEMINI_API_KEY=...` there, or use the dashboard's masked session
+key field. `.env` and `outputs/` are ignored by Git. Restart after editing `.env`.
+Never add the key to a tracked configuration file.
+
+Betting odds now follows public bounded discovery → selected market detail
+validation → timestamped two-sided Socket.IO book → explicit model estimate →
+schema/citation validation → audited specialist result. Collection runs immediately
+before the forecast reference quote and cutoff are chosen. A failed refresh clears
+the previous book. The stream and model estimate stay separate from the market's
+YES payout midpoint; neither REST prices nor a synthetic book replace a failed
+live feed. Full-book updates and increasing versions are required; unsupported
+rules, partial frames, stale quotes, disconnects and quiet streams cause abstention.
+The portable discovery search checks at most five pages and is not exhaustive.
+Raw public capture and failure status are saved in `outputs/dashboard/books/`.
+Native certificate trust is used with verification enabled. The default public
+transport implements the documented Engine.IO v4/Socket.IO text handshake,
+subscription and heartbeat over WebSocket in `public_stream.py`; an injected
+Socket.IO client factory remains supported for older callers. The first book
+snapshot is discarded and a subsequent increasing version is required. Provider
+clocks may lead local receipt by at most 500 milliseconds: that measured skew is
+disclosed in the saved quote/model evidence and both original timestamps remain
+unchanged. Larger future offsets and books older than 30 seconds are rejected.
+
+Run the repeated two-specialist experiment from the project root:
+
+```bash
+# Collect real Yahoo BTC articles and Alternative.me FNG once; no Gemini calls:
+python -m experiments.news_robustness --prepare-only --attack all
+
+# Two independent clean/attacked repeats: eight potentially paid Gemini calls.
+# Uses GEMINI_MODEL, or pass --model with an available Gemini model name.
+python -m experiments.news_robustness --live --repeats 2 --attack bearish_claim
+
+# Three prepared scenarios, three repeats: 36 potentially paid calls.
+python -m experiments.news_robustness --live --repeats 3 --attack all
+```
+
+Each run freezes the real input snapshot and 24-hour target. Prepared attacks
+include unverified bearish/bullish claims and a prompt-injection article, with
+explicit scenario publication timestamps no later than the prediction cutoff.
+They are local fabricated articles, never published externally or labelled as
+verified Yahoo stories. Ground truth is saved separately from model evidence.
+The runner appends an article directly instead of using the older unsupported
+`fake_headline` string. Mood consumes only FNG, so its input stays unchanged as a
+negative control. Each repeat re-runs clean and attacked arms; their order alternates.
+
+`outputs/news_robustness/<UTC timestamp>-<id>/` contains exact inputs, SHA-256
+hashes, attack manifests, each prompt/raw Gemini response, parsed result, provider
+response ID when available, token usage, timestamps and `summary.json`. Invalid
+responses and abstentions remain incomplete pairs; they are never filled with
+0.5 or counted as zero shifts. Shared parsing accepts SDK parsed models, JSON
+text, text blocks and a single JSON fence, and rejects duplicate keys, truncated
+JSON, nonfinite numbers and invalid probabilities. News spelling variants such
+as `news_specialist` normalize to the registered identity.
+
+On 18 November 2026, the complete live Betting Odds path also passed: native
+public discovery and book capture produced a fresh validated observation, and
+one actual Gemini structured response produced a validated 0.508 model estimate.
+This is separate from the observed contract's payout midpoint and is uncalibrated.
+
+On 18 November 2026, eight real `gemini-3.8-flash` responses passed validation in
+two clean/attacked repeats. News changed from 0.38 to 0.36 and from 0.39 to 0.32
+under the bearish-claim scenario (mean absolute shift 4.5 percentage points).
+The unchanged-input Mood control also varied (mean absolute shift 2.5 percentage
+points). These small runs verify the connection and parsing, and illustrate model
+variation; they do not establish causal attack effects, robustness, forecast
+accuracy, or full 13-agent performance. Results remain local in ignored outputs.
+
+Final validation for this update: **599 tests and 127 subtests passed**, with six
+PowerShell-only skips. A fresh wheel built successfully and installed imports,
+legacy aliases and packaged resources were checked outside the checkout.
+
 ## Remaining work
 
-- Verify Betting odds with a validated fresh book and a complete model-result
-  path. The Gemini bridge returns JSON text; the market-evidence validator needs
-  a parsed object or explicit JSON validation at that adapter boundary.
+- Verify sustained live Betting odds availability on the demo network. The
+  dashboard now captures a fresh public book and validates Gemini JSON output;
+  missing/invalid streams abstain rather than borrowing REST quote timestamps.
 - Live dashboard forecasts currently start with equal initial coins. Demonstrate
   learning using settled replay outcomes, or implement durable live settlement
   before claiming cross-run live learning. With a 20% influence cap, at least
   six active agents are needed to demonstrate unequal capped weights.
-- Configure Gemini locally and validate actual News/Mood/debate responses; no
-  key was present during implementation. Mock tests do not validate model quality.
+- Validate the Bull/Bear/Judge debate with Gemini and evaluate held-out forecast
+  outcomes. Actual News/Mood responses were verified on 18 November 2026;
+  successful response parsing does not establish forecast accuracy.
 - Supply reviewed timestamped ETF-flow reports, a valid fresh prediction-market
   book, and a CoinGecko key plus comparable snapshots approximately 24 hours apart.
 - Archive point-in-time evidence prospectively. Downloaded historical prices and

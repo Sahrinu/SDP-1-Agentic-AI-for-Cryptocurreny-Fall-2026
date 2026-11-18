@@ -17,7 +17,7 @@ def prepare(observation,context,prediction):
 
 def evaluate(features,call):
     payload=call(model.build_prompt(features))
-    value=model.ModelEstimate.model_validate(payload)
+    value=model.ModelEstimate.model_validate(model.parse_model_object(payload))
     ids={e['evidence_id'] for e in features['evidence']}
     if not set(value.evidence_ids)<=ids:raise ValueError('Unknown evidence citation')
     if value.probability_up is not None and not value.evidence_ids:raise ValueError('Missing evidence citations')

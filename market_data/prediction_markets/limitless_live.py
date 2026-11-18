@@ -23,6 +23,9 @@ WS_URL = 'https://ws.limitless.exchange'
 NAMESPACE = '/markets'
 MARKET_LISTING_PATH = '/markets/active'
 MAX_SAVED_LISTING_PAGES = 100
+# Provider and local clocks are not synchronized. Bound and disclose the small
+# positive skew observed on the real public feed; do not rewrite either time.
+MAX_PROVIDER_CLOCK_AHEAD_SECONDS = 0.5
 
 
 def _number(value):
@@ -40,7 +43,8 @@ def read_book_event(event, market, received_at, *, max_age_seconds=30):
         raise ValueError('Book belongs to a different market')
     received = _datetime(received_at)
     stamp = _datetime(event.get('timestamp'))
-    if not 0 <= (received - stamp).total_seconds() <= max_age_seconds:
+    age = (received - stamp).total_seconds()
+    if not -MAX_PROVIDER_CLOCK_AHEAD_SECONDS <= age <= max_age_seconds:
         raise ValueError('Book event is stale or in the future')
     version = event.get('version')
     if isinstance(version, bool) or not isinstance(version, int) or version <= 0:
@@ -75,13 +79,16 @@ def read_book_event(event, market, received_at, *, max_age_seconds=30):
     bid, ask = parsed['bids'][0][0], parsed['asks'][0][0]
     if bid > ask:
         raise ValueError('Crossed order book')
-    return dict(market_slug=market['slug'], provider_event_time=stamp.isoformat(),
+    summary = dict(market_slug=market['slug'], provider_event_time=stamp.isoformat(),
                 received_at=received.isoformat(), version=version,
                 best_bid=bid, best_ask=ask, spread=ask-bid,
                 yes_payout_midpoint=(bid+ask)/2,
                 best_bid_shares=parsed['bids'][0][1], best_ask_shares=parsed['asks'][0][1],
                 displayed_bid_shares=sum(s for _, s in parsed['bids']),
                 displayed_ask_shares=sum(s for _, s in parsed['asks']))
+    if age < 0:
+        summary['provider_clock_ahead_seconds'] = -age
+    return summary
 
 
 class BookTracker:
@@ -119,19 +126,19 @@ class BookTracker:
 def capture_book(market, *, timeout_seconds=20, client_factory=None):
     """One public connection, no retry/reconnect, at most timeout per connect/wait.
 
-    Dependency: python-socketio[client]. The first frame is never accepted as a
+    Dependency: websocket-client (live extra). An injected Socket.IO client factory
+    remains supported for older callers. The first frame is never accepted as a
     fresh live change. The raw accepted frame is saved together with its summary.
     """
-    if not 1 <= timeout_seconds <= 30:
+    if (isinstance(timeout_seconds, bool) or not isinstance(timeout_seconds, (int, float))
+            or not 1 <= timeout_seconds <= 30):
         raise ValueError('Stream timeout must be between 1 and 30 seconds')
     if client_factory is None:
-        try:
-            import socketio
-        except ImportError as exc:
-            raise RuntimeError('Install python-socketio[client] to read the public stream') from exc
-        client_factory = socketio.Client
+        from market_data.prediction_markets.public_stream import capture_public_book
+        return capture_public_book(market, BookTracker(market, datetime.now(timezone.utc)),
+                                   timeout_seconds=timeout_seconds)
     client = client_factory(reconnection=False, request_timeout=timeout_seconds,
-                            logger=False, engineio_logger=False)
+                            logger=False, engineio_logger=False, timestamp_requests=False)
     finished = threading.Event()
     tracker = BookTracker(market, datetime.now(timezone.utc))
     state = {}
@@ -144,10 +151,9 @@ def capture_book(market, *, timeout_seconds=20, client_factory=None):
                 finished.set()
 
     def connected():
-        try:
-            client.emit('subscribe_market_prices', {'marketSlugs': [market['slug']]}, namespace=NAMESPACE)
-        except Exception:
-            fail('Could not subscribe to the public market channel')
+        # Subscribe after connect() has completed its namespace handshake.
+        # Sending from inside the callback can race server-side initialization.
+        pass
 
     def updated(event):
         with lock:
@@ -171,6 +177,9 @@ def capture_book(market, *, timeout_seconds=20, client_factory=None):
     try:
         client.connect(WS_URL, transports=['websocket'], namespaces=[NAMESPACE],
                        wait_timeout=timeout_seconds)
+        if 'error' in state:
+            raise RuntimeError(state['error'])
+        client.emit('subscribe_market_prices', {'marketSlugs': [market['slug']]}, namespace=NAMESPACE)
         finished.wait(max(0, deadline-time.monotonic()))
         if 'error' in state:
             raise RuntimeError(state['error'])
@@ -331,6 +340,30 @@ def observe_market(*, slug=None, contract=None, fetch_page=_fetch_page, capture=
                            else 'No usable live observation; inspect connectivity, supported rules and stream availability.')
     report['finished_at_utc'] = datetime.now(timezone.utc).isoformat()
     return report
+
+
+def observe_current_market():
+    """Portable bounded discovery followed by a new public stream capture.
+
+    A changing catalogue total need not invalidate a selected candidate: its
+    individual detail is re-fetched and validated. This search is explicitly
+    non-exhaustive, unlike the legacy full-listing inspector.
+    """
+    from market_data.prediction_markets.limitless_targeted_discovery import discover
+    from market_data.http import get_json
+    from urllib.parse import quote
+    try:
+        market, discovery = discover(fetch_page=_fetch_page,
+            fetch_detail=lambda slug, timeout: get_json(
+                'https://api.limitless.exchange/markets/' + quote(slug, safe=''), timeout=timeout),
+            max_pages=5)
+    except Exception as exc:
+        return {'mode': 'live_read_only_observation', 'observation_status': 'failed',
+                'stage': 'bounded_market_discovery', 'error_type': type(exc).__name__,
+                'finished_at_utc': datetime.now(timezone.utc).isoformat()}
+    result = observe_market(targeted_market=market)
+    result['discovery'] = discovery
+    return result
 
 
 def main():

@@ -317,6 +317,13 @@ class NewsSpecialistResult(BaseModel):
     data_status: Literal["sufficient_data", "insufficient_data"] = Field(description="Whether the filtered evidence set is enough to assess the event.")
     limitations: list[str] = Field(default_factory=list, description="Known limitations, filtering notes, and missing-data caveats.")
 
+    @field_validator('probability_up', mode='before')
+    @classmethod
+    def _numeric_probability(cls, value):
+        if value is not None and (isinstance(value, bool) or not isinstance(value, (int, float))):
+            raise ValueError('Probability must be a JSON number or null')
+        return value
+
     @model_validator(mode="after")
     def _validate_probability_and_data_status(self):
         if self.data_status == "insufficient_data":

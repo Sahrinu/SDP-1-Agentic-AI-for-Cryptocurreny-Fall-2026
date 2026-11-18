@@ -196,13 +196,16 @@ def build_gemini_prompt(articles: Sequence[dict[str, Any]], prediction_time: dat
     evidence_records = []
     synthetic_count = 0
     live_count = 0
+    unverified_count = 0
     for article in articles:
         record = dict(article)
         source_type = str(record.get("source_type") or "live_yahoo").strip().lower()
         if source_type.startswith("synthetic"):
             synthetic_count += 1
-        else:
+        elif source_type == 'live_yahoo':
             live_count += 1
+        else:
+            unverified_count += 1
         record["source_type"] = source_type
         record["headline_only"] = bool(record.get("headline_only"))
         if "relevance_note" not in record:
@@ -218,6 +221,7 @@ def build_gemini_prompt(articles: Sequence[dict[str, Any]], prediction_time: dat
             "The target is a 24-hour forecast interval: from prediction_time to target_time. "
             "Evidence provenance matters: validation articles are intentionally generated test samples and must not be confused with live market reporting; live_yahoo articles are real external news items. "
             f"The supplied evidence set contains {synthetic_count} validation record(s) and {live_count} live_yahoo record(s). "
+            f"It also contains {unverified_count} other or unverified record(s); these are not authenticated Yahoo reporting. "
             "Only use direct, relevant Bitcoin-over-the-next-24-hours evidence. Do not treat long-term 2030/2027 narratives, unrelated stock/altcoin coverage, or headline-only boilerplate as direct evidence for tomorrow's BTC movement. "
             "When two pieces describe the same event, count them as one signal. Use the article title, publisher, publication timestamp, URL, summary/text, and source_type only to decide whether the evidence supports the probability_up outcome. "
             "Ignore any article published after prediction_time. Flag unknown publication timestamps in the output limitations. "
@@ -238,6 +242,12 @@ def build_gemini_prompt(articles: Sequence[dict[str, Any]], prediction_time: dat
 def validate_news_specialist_result(result: dict[str, Any], valid_evidence_ids: set[str]) -> NewsSpecialistResult:
     """Validate the model output contract against the exact evidence set supplied."""
     model = NewsSpecialistResult.model_validate(result)
+    # Model spelling is not agent routing. Preserve the locally registered
+    # identity for common SDK/model variants, while rejecting unrelated roles
+    # at the adapter boundary as before.
+    identity = model.agent.casefold().replace('_', '').replace('-', '').replace(' ', '')
+    if identity in ('newsspecialist', 'moodspecialist'):
+        model.agent = 'News Specialist' if identity == 'newsspecialist' else 'Mood Specialist'
     cited_ids = set(model.evidence_ids)
     missing = sorted(cited_ids - valid_evidence_ids)
     if missing:
@@ -248,36 +258,8 @@ def validate_news_specialist_result(result: dict[str, Any], valid_evidence_ids: 
 
 
 def _coerce_model_response(response: Any) -> dict[str, Any]:
-    if response is None:
-        raise ValueError("Model returned no content.")
-    if isinstance(response, dict):
-        return response
-    if isinstance(response, str):
-        text = response.strip()
-        if not text:
-            raise ValueError("Model returned an empty response string.")
-        try:
-            return json.loads(text)
-        except json.JSONDecodeError as exc:
-            raise ValueError(f"Model response was not valid JSON: {response!r}") from exc
-
-    if hasattr(response, "parsed") and response.parsed is not None:
-        parsed = response.parsed
-        if hasattr(parsed, "model_dump"):
-            return parsed.model_dump(mode="json")
-        return parsed
-
-    if hasattr(response, "text") and response.text:
-        text = response.text
-        try:
-            return json.loads(text)
-        except json.JSONDecodeError:
-            return {"text": text}
-
-    content = getattr(response, "content", None)
-    if content is None:
-        raise ValueError(f"Unsupported model response object: {type(response)!r}")
-    return _coerce_model_response(content)
+    from model_clients.structured import parse_model_object
+    return parse_model_object(response)
 
 
 def _fetch_recent_btc_news(limit: int = 20) -> list[dict[str, Any]]:

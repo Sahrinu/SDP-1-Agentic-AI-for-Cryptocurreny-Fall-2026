@@ -10,6 +10,7 @@ import html
 import json
 import math
 import re
+import ssl
 import urllib.error
 import urllib.request
 from datetime import datetime, timedelta, timezone
@@ -67,9 +68,19 @@ class _MarketResponseValidationError(ValueError):
 def _fetch_page(page: int, limit: int, timeout: float) -> dict[str, Any]:
     """Fetch one public page, without credentials, proxies, redirects or retries."""
     url = f"{API_URL}?page={page}&limit={limit}"
-    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), _NoRedirect())
-    with opener.open(url, timeout=timeout) as response:
-        payload = json.load(response)
+    try:
+        import truststore
+        context = truststore.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+    except ImportError:
+        context = ssl.create_default_context()
+    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), _NoRedirect(),
+                                         urllib.request.HTTPSHandler(context=context))
+    request = urllib.request.Request(url, headers={'User-Agent': 'BitcoinAgentExchange-research/0.1'})
+    with opener.open(request, timeout=timeout) as response:
+        raw = response.read(8_000_001)
+    if len(raw) > 8_000_000:
+        raise _MarketResponseValidationError('market response exceeds the size limit')
+    payload = json.loads(raw)
     if not isinstance(payload, dict):
         raise _MarketResponseValidationError("market response must be an object")
     return payload

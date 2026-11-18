@@ -15,6 +15,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 from agents.schemas import NewsSpecialistResult
+from model_clients.structured import parse_model_object
 from agents.specialists.betting_odds_specialist import _datetime, _rules
 from market_data.prediction_markets.limitless_live import read_book_event
 
@@ -35,6 +36,13 @@ class ModelEstimate(BaseModel):
     assumptions: str = Field(min_length=1)
     evidence_ids: list[str]
     limitations: list[str]
+
+    @field_validator('probability_up', mode='before')
+    @classmethod
+    def numeric_probability(cls, value):
+        if value is not None and (isinstance(value, bool) or not isinstance(value, (int, float))):
+            raise ValueError('Probability must be a JSON number or null')
+        return value
 
     @field_validator('explanation','target_analysis','contract_differences','assumptions')
     @classmethod
@@ -122,6 +130,11 @@ def prepare_evidence(observation, prediction, target, *, price_source, reference
             'Visible liquidity may disappear; provider timestamp is not the creation time of each resting order.',
         ]}
     evidence = features['evidence'][0]
+    evidence['provider_clock_ahead_seconds'] = checked.get('provider_clock_ahead_seconds', 0)
+    if evidence['provider_clock_ahead_seconds']:
+        features['limitations'].append(
+            'Provider clock was ahead of local receipt by less than 0.5 seconds; '
+            'both original timestamps are retained, without assuming exact clock synchronization.')
     if threshold is not None:
         features['limitations'].append('The threshold-hit market is a path-dependent event, not the forecast endpoint rise.')
     if not evidence['window_matches_target']:
@@ -195,7 +208,7 @@ def forecast_from_market_evidence(observation, *, prediction_time, target_time,
         return missing('Evidence validated, but no model was requested; no forecast was generated.')
     try:
         payload=model_call(build_prompt(features))
-        estimate=payload if isinstance(payload,ModelEstimate) else ModelEstimate.model_validate(payload)
+        estimate=payload if isinstance(payload,ModelEstimate) else ModelEstimate.model_validate(parse_model_object(payload))
         allowed={item['evidence_id'] for item in features['evidence']}
         if not set(estimate.evidence_ids).issubset(allowed):
             raise ValueError('Unknown evidence ID')

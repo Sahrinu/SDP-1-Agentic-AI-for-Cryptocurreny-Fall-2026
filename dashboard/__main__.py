@@ -36,7 +36,7 @@ def create_server(port=8765, *, root=ROOT, bind=True):
                     data.clear(); data.update(collected)
                     state.update(sources=sources,forecast=None,paper=None,debate=None,message='Collection finished. Inspect source status, then run forecast.')
             elif action == 'forecast':
-                from market_data.live import collect_news, collect_recent_bitcoin, reference_quote
+                from market_data.live import collect_news, collect_recent_bitcoin, reference_quote, refresh_betting_inputs
                 with lock:
                     forecast_data = dict(data)
                 news_capture = None
@@ -90,7 +90,17 @@ def create_server(port=8765, *, root=ROOT, bind=True):
                 if credentials.public_status()["configured"]:
                     from model_clients.demo_gemini import DemoGemini
                     client = DemoGemini(api_key=credentials.resolved_key())
-                result = forecast_snapshot(forecast_data,reference_quote(),client=client,on_progress=activity.record)
+                with lock:
+                    state['message'] = 'Reading a fresh public prediction-market book before forecasting.'
+                book_directory = root/'outputs/dashboard/books'/datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S%fZ')
+                book_status = refresh_betting_inputs(forecast_data, book_directory)
+                with lock:
+                    state['sources']['betting_odds'] = book_status
+                try:
+                    result = forecast_snapshot(forecast_data,reference_quote(),client=client,on_progress=activity.record)
+                finally:
+                    if client is not None:
+                        client.close()
                 result['intraday_capture'] = intraday_capture
                 result['news_capture'] = news_capture
                 activity.finish()

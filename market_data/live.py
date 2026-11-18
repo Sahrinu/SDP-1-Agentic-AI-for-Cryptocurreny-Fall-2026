@@ -112,6 +112,50 @@ def collect_news():
     return _fetch_recent_btc_news()
 
 
+def collect_betting_inputs(directory, *, observe=None):
+    """One read-only stream attempt; persist the exact frame or failure report.
+
+    Call immediately before choosing a new prediction timestamp. REST listing
+    prices and historical fixtures are never substituted for a fresh book.
+    """
+    directory = Path(directory)
+    directory.mkdir(parents=True, exist_ok=True)
+    report = None
+    try:
+        from market_data.prediction_markets.limitless_live import observe_current_market
+        from agents.specialists.market_evidence_specialist import prepare_evidence
+        report = (observe or observe_current_market)()
+        receipt = now()
+        if report.get('observation_status') != 'book_observed':
+            raise ValueError('No qualifying public book received')
+        prepare_evidence(report, receipt, receipt + timedelta(hours=24),
+            price_source='binance:BTC/USDT',
+            reference_price_definition='last completed UTC one-minute close at or before each contract timestamp')
+        status = {'status': 'collected', 'received_at': receipt.isoformat(),
+                  'provider_event_time': report['quote']['provider_event_time'],
+                  'market_slug': report['market']['slug']}
+        inputs = {'student2_market_observation': report,
+                  'student2_markets_observed_at': receipt.isoformat()}
+    except Exception as exc:
+        status = {'status': 'unavailable', 'reason': type(exc).__name__,
+                  'detail': 'No validated fresh two-sided book; Betting Odds will abstain.'}
+        inputs = {}
+        if not isinstance(report, dict):
+            report = {'observation_status': 'failed', 'error_type': type(exc).__name__}
+    (directory / 'betting_observation.json').write_text(json.dumps(report, default=str, indent=2))
+    (directory / 'betting_status.json').write_text(json.dumps(status, indent=2))
+    return inputs, status
+
+
+def refresh_betting_inputs(data, directory, *, observe=None):
+    """Replace the previous book, including when the new capture fails."""
+    for key in ('student2_market_observation', 'student2_markets_observed_at', 'student2_price_context'):
+        data.pop(key, None)
+    inputs, status = collect_betting_inputs(directory, observe=observe)
+    data.update(inputs)
+    return status
+
+
 def collect_snapshot(directory, *, input_directory=None):
     """Independent failures are recorded; unavailable sources never become synthetic."""
     directory = Path(directory)
@@ -204,7 +248,7 @@ def collect_snapshot(directory, *, input_directory=None):
     if value is not None:
         data['etf_flows'] = value
     statuses['betting_odds'] = {'status':'unavailable',
-        'reason':'Requires validated timestamped market-book capture; no automatic REST-price substitution'}
+        'reason':'A fresh public book is requested immediately before Generate 24h forecast; no REST-price substitution'}
     # Persist the exact vintage for provenance; not eligible for old-date replay.
     for key,value in data.items():
         if isinstance(value,pd.DataFrame):

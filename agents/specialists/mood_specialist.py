@@ -13,6 +13,7 @@ from langchain_core.messages import HumanMessage
 
 from agents.specialists.news_specialist import (
     _invoke_native_google_request,
+    _coerce_model_response,
     _parse_datetime,
     create_llm_client,
     validate_news_specialist_result,
@@ -231,12 +232,12 @@ def run_mood_specialist(
         if isinstance(response, NewsSpecialistResult):
             response.agent = "Mood Specialist"
             return validate_news_specialist_result(response.model_dump(mode="json"), valid_ids)
-        payload = response if isinstance(response, dict) else json.loads(response.content)
+        payload = _coerce_model_response(response)
         payload["agent"] = "Mood Specialist"
         return validate_news_specialist_result(payload, valid_ids)
 
     response = model_client.invoke([HumanMessage(content=prompt["content"])])
-    payload = response if isinstance(response, dict) else json.loads(response.content)
+    payload = _coerce_model_response(response)
     payload["agent"] = "Mood Specialist"
     result = validate_news_specialist_result(payload, valid_ids)
     return result
