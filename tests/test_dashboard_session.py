@@ -43,7 +43,7 @@ def test_forecast_reuses_recent_news_and_drops_it_after_failed_refetch(local_htt
     def collect_news():
         fetched.append(True)
         raise RuntimeError('Yahoo unavailable in unit test')
-    def forecast(data, quote, *, client, on_progress):
+    def forecast(data, quote, *, client, on_progress, ledger=None):
         seen.append(data)
         return {'id':'news-test-'+str(len(seen))}
     books = []
@@ -242,7 +242,7 @@ def test_http_progress_is_visible_before_the_forecast_finishes(local_http,monkey
     monkeypatch.setattr(live,'reference_quote',lambda:{'source':'unit-test-only'})
     monkeypatch.setattr(live,'collect_news',lambda:[{'title':'Unit test BTC article'}])
     monkeypatch.setattr(live,'refresh_betting_inputs',lambda *a,**kw:{'status':'unavailable','reason':'offline test'})
-    def forecast(data,quote,*,client,on_progress):
+    def forecast(data,quote,*,client,on_progress,ledger=None):
         for index,spec in enumerate(CATALOG):
             on_progress({'event':'agent_started','role':spec.name})
             if index==0:

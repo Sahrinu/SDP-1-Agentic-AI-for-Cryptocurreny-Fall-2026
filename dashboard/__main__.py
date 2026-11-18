@@ -10,6 +10,7 @@ from dashboard.credentials import SessionCredentials, load_dashboard_environment
 from dashboard.activity import ForecastActivity
 
 from dashboard.service import forecast_snapshot,PaperStore,json_safe,market_snapshot,recent_news_snapshot
+from exchange.ledger import LiveLedger
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -26,17 +27,34 @@ def create_server(port=8765, *, root=ROOT, bind=True):
     lock = threading.Lock()
     store = PaperStore(root/'outputs/dashboard/paper.sqlite3')
     state['paper'] = store.latest_decision()
+    ledger = LiveLedger(root/'outputs/dashboard/live_ledger.sqlite3')
+    state['learning'] = ledger.summary()
+    def settle_live():
+        # Pay out every live forecast whose 24h window has ended, oldest first.
+        try:
+            from market_data.live import target_quote
+            outcome = ledger.settle_due(target_quote)
+            problem = outcome['problem']
+        except Exception as exc:
+            outcome, problem = {'settled':[]}, {'reason':type(exc).__name__}
+        summary = ledger.summary()
+        summary['just_settled'] = len(outcome['settled'])
+        summary['problem'] = problem
+        with lock:
+            state['learning'] = summary
     def work(action):
         try:
             if action == 'collect':
                 from market_data.live import collect_snapshot
                 directory = root/'outputs/dashboard/snapshots'/datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S%fZ')
                 collected,sources = collect_snapshot(directory, input_directory=root/"data")
+                settle_live()
                 with lock:
                     data.clear(); data.update(collected)
                     state.update(sources=sources,forecast=None,paper=None,debate=None,message='Collection finished. Inspect source status, then run forecast.')
             elif action == 'forecast':
                 from market_data.live import collect_news, collect_recent_bitcoin, reference_quote, refresh_betting_inputs
+                settle_live()
                 with lock:
                     forecast_data = dict(data)
                 news_capture = None
@@ -97,7 +115,7 @@ def create_server(port=8765, *, root=ROOT, bind=True):
                 with lock:
                     state['sources']['betting_odds'] = book_status
                 try:
-                    result = forecast_snapshot(forecast_data,reference_quote(),client=client,on_progress=activity.record)
+                    result = forecast_snapshot(forecast_data,reference_quote(),client=client,on_progress=activity.record,ledger=ledger)
                 finally:
                     if client is not None:
                         client.close()
@@ -111,8 +129,13 @@ def create_server(port=8765, *, root=ROOT, bind=True):
                 temporary = destination.with_suffix('.json.tmp')
                 temporary.write_text(json.dumps(result,default=str,indent=2))
                 temporary.replace(destination)
+                try:
+                    ledger.record(result)
+                    learning = ledger.summary()
+                except Exception as exc:
+                    learning = dict(ledger.summary(), problem={'reason':'Forecast not recorded for settlement: '+type(exc).__name__})
                 with lock:
-                    state.update(forecast=result,paper=None,debate=None,message='Fresh forecast saved. Outcome is pending for 24 hours.')
+                    state.update(forecast=result,paper=None,debate=None,learning=learning,message='Fresh forecast saved. Outcome is pending for 24 hours; it is settled automatically on the next collect or forecast after that.')
             elif action == 'debate':
                 from experiments.debate import debate
                 from model_clients.demo_gemini import DemoGemini

@@ -100,6 +100,7 @@ def load_fake_headlines():
 class AgentAnswer:
     probability: float | None
     reason: str | None = None
+    evidence: tuple = ()
 
 
 def ask_agent(name, module, day, view):
@@ -120,7 +121,11 @@ def ask_agent(name, module, day, view):
         # Do not expose exception text that could contain credentials.
         return AgentAnswer(None, "Agent failed: " + type(exc).__name__)
     # Preserve the original runner's clipping policy for valid forecasts.
-    return AgentAnswer(min(0.95, max(0.05, p)))
+    evidence = out.get("evidence") or ()
+    if isinstance(evidence, str):
+        evidence = (evidence,)
+    evidence = tuple(str(e)[:300] for e in list(evidence)[:5])
+    return AgentAnswer(min(0.95, max(0.05, p)), evidence=evidence)
 
 
 def combine(ex, forecasts):
@@ -182,7 +187,7 @@ def _ask_registered_agent(name, module, student2_names, day, view, window_error)
     return ask_agent(name, module, day, view)
 
 
-def evaluate_agents(agents, student2_names, day, view, window_error):
+def evaluate_agents(agents, student2_names, day, view, window_error, evidence_log=None):
     forecasts, abstentions = {}, {}
     for name, module in agents.items():
         if getattr(module, "FORECAST_STAGE", None) == "ensemble":
@@ -192,12 +197,14 @@ def evaluate_agents(agents, student2_names, day, view, window_error):
             abstentions[name] = answer.reason
         else:
             forecasts[name] = answer.probability
+            if evidence_log is not None:
+                evidence_log[name] = answer.evidence
     return evaluate_ensemble_agents(agents, student2_names, day, view, window_error,
-                                    forecasts, abstentions)
+                                    forecasts, abstentions, evidence_log=evidence_log)
 
 
 def evaluate_ensemble_agents(agents, student2_names, day, view, window_error,
-                             forecasts, abstentions):
+                             forecasts, abstentions, evidence_log=None):
     """All second-stage agents read the same frozen first-stage probabilities.
 
     Reused after news attacks so Contrarian never keeps its clean response when
@@ -220,15 +227,49 @@ def evaluate_ensemble_agents(agents, student2_names, day, view, window_error,
             abstentions[name] = answer.reason
         else:
             forecasts[name] = answer.probability
+            if evidence_log is not None:
+                evidence_log[name] = answer.evidence
     return forecasts, abstentions
+
+
+def debate_forecast(day, tomorrow, forecasts, evidence, model_call, log):
+    """Bull/Bear/Judge debate over the same agent reports (experiments/debate.py).
+
+    Returns the judge's p_up, or None when the debate is unavailable or invalid.
+    The debate never adds votes to the Exchange; it is a separate comparison method.
+    """
+    from experiments.debate import debate
+    snapshot = {
+        "contract": {"question": "Is the BTC daily close on " + str(tomorrow.date()) +
+                     " strictly higher than on " + str(day.date()) + "? Ties count as down.",
+                     "decision_day": str(day.date()), "target_day": str(tomorrow.date())},
+        "agents": [{"role": name, "p_up": p, "audit": {"passed": True},
+                    "evidence": list(evidence.get(name) or ["p_up only; no evidence returned"])}
+                   for name, p in sorted(forecasts.items())],
+    }
+    try:
+        result = debate(snapshot, model_call)
+    except Exception as exc:
+        log.append({"date": str(day.date()), "status": "failed", "reason": type(exc).__name__})
+        return None
+    if not result.get("available"):
+        log.append({"date": str(day.date()), "status": "unavailable", "reason": result.get("reason")})
+        return None
+    p = float(result["p_up"])
+    log.append({"date": str(day.date()), "status": "ok", "p_up": p,
+                "turns": [{"role": t["role"], "argument": t["argument"],
+                           "evidence_ids": t["evidence_ids"]} for t in result["turns"]]})
+    return min(0.95, max(0.05, p))
 
 
 # ---------- main loop ----------
 
 def run(start, end, attack_days, data_dir, agents_dir, out_dir, *,
         student2_adapters=None, student2_inputs=None, settlement_contract=None,
-        paper_policy=None, synthetic=False):
+        paper_policy=None, synthetic=False, debate_client=None):
     print("Loading data and agents...")
+    methods = METHODS + (["debate"] if debate_client is not None else [])
+    debate_log = []
     if paper_policy is not None:
         paper_out = Path(out_dir) / "paper"
         if paper_out.exists() and any(paper_out.iterdir()):
@@ -277,8 +318,12 @@ def run(start, end, attack_days, data_dir, agents_dir, out_dir, *,
             # Only specialist fields may be overlaid; never replace price tables.
             view.update({k: v for k, v in snapshot.items() if k.startswith("student2_")})
         error = student2_window_error(day, tomorrow, snapshot, settlement_contract)
-        forecasts, abstentions = evaluate_agents(agents, student2_names, day, view, error)
+        evidence = {}
+        forecasts, abstentions = evaluate_agents(agents, student2_names, day, view, error,
+                                                 evidence_log=evidence)
         team = combine(ex, forecasts)
+        if debate_client is not None:
+            team["debate"] = debate_forecast(day, tomorrow, forecasts, evidence, debate_client, debate_log)
         weights = ex.weights(forecasts.keys()) if forecasts else {}
         went_up = bool(close[tomorrow] > close[day])
         row = {"date": day.date(),
@@ -291,31 +336,39 @@ def run(start, end, attack_days, data_dir, agents_dir, out_dir, *,
         rows.append(row)
 
         if day in attack_set:
-            headline = headlines[len(attack_rows) // len(METHODS) % len(headlines)]
+            headline = headlines[len(attack_rows) // len(methods) % len(headlines)]
             attacked_view = dict(view)
             attacked_view["fake_headline"] = headline
             attacked = dict(forecasts)
             attack_abstentions = dict(abstentions)
+            attacked_evidence = dict(evidence)
             for name in news_agents:
                 answer = _ask_registered_agent(name, agents[name], student2_names,
                                                day, attacked_view, error)
                 attacked.pop(name, None)
                 attack_abstentions.pop(name, None)
+                attacked_evidence.pop(name, None)
                 if answer.probability is None:
                     attack_abstentions[name] = answer.reason
                 else:
                     attacked[name] = answer.probability
+                    attacked_evidence[name] = answer.evidence
             attacked, attack_abstentions = evaluate_ensemble_agents(
                 agents, student2_names, day, attacked_view, error, attacked, attack_abstentions,
+                evidence_log=attacked_evidence,
             )
             team_attacked = combine(ex, attacked)
+            if debate_client is not None:
+                team_attacked["debate"] = debate_forecast(day, tomorrow, attacked, attacked_evidence,
+                                                          debate_client, debate_log)
             comparable = (bool(news_agents) and set(forecasts) == set(attacked)
                           and all(name in forecasts and name in attacked for name in news_agents))
-            for m in METHODS:
+            for m in methods:
+                both = team[m] is not None and team_attacked[m] is not None
                 attack_rows.append({
                     "date": day.date(), "method": m, "headline": headline,
                     "clean": rounded(team[m]), "attacked": rounded(team_attacked[m]),
-                    "shift": rounded(abs(team_attacked[m] - team[m])) if comparable else None,
+                    "shift": rounded(abs(team_attacked[m] - team[m])) if comparable and both else None,
                     "comparable": comparable,
                     "comparison_reason": "" if comparable else "Targeted news agent unavailable or participating agents changed",
                     "clean_active_agents": json.dumps(sorted(forecasts)),
@@ -335,11 +388,11 @@ def run(start, end, attack_days, data_dir, agents_dir, out_dir, *,
     attacks = pd.DataFrame(attack_rows, columns=["date", "method", "headline", "clean", "attacked", "shift", "comparable", "comparison_reason", "clean_active_agents", "attacked_active_agents", "attacked_abstentions"])
 
     from experiments.evaluation import paired_brier
-    uncertainty = {m: paired_brier(results[m], results["went_up"]) for m in METHODS}
+    uncertainty = {m: paired_brier(results[m], results["went_up"]) for m in methods}
 
     # ---------- summary ----------
     summary = []
-    for m in METHODS:
+    for m in methods:
         valid = results[m].notna()
         p, y = results.loc[valid, m].astype(float), results.loc[valid, "went_up"]
         line = {
@@ -365,6 +418,12 @@ def run(start, end, attack_days, data_dir, agents_dir, out_dir, *,
     summary.to_csv(out / "summary.csv", index=False)
 
     (out / "uncertainty.json").write_text(json.dumps(uncertainty, indent=2) + "\n", encoding="utf-8")
+    if debate_client is not None:
+        (out / "debate_log.json").write_text(json.dumps(debate_log, indent=2) + "\n", encoding="utf-8")
+        usage = list(getattr(debate_client, "usage", []) or [])
+        (out / "model_usage.json").write_text(json.dumps({
+            "debate_calls": len(usage), "debate_decisions": len(debate_log),
+            "calls": usage}, indent=2) + "\n", encoding="utf-8")
 
     if paper_policy is not None:
         from experiments.paper import replay_portfolios
@@ -406,8 +465,13 @@ if __name__ == "__main__":
     parser.add_argument("--buy-threshold", type=float, default=0.55)
     parser.add_argument("--sell-threshold", type=float, default=0.45)
     parser.add_argument("--synthetic", action="store_true", help="Label this run's data and agents as synthetic")
+    parser.add_argument("--debate", action="store_true",
+                        help="Also run the Bull/Bear/Judge debate each day (3 Gemini calls per day, plus 3 per attack day)")
     args = parser.parse_args()
     extras = {}
+    if args.debate:
+        from model_clients.demo_gemini import DemoGemini
+        extras["debate_client"] = DemoGemini()
     if args.paper:
         from experiments.paper import TradingPolicy
         supplied = (args.risk_max_forecast_swing, args.risk_max_cumulative_loss,
@@ -432,4 +496,8 @@ if __name__ == "__main__":
         extras.update(student2_adapters={a.AGENT_NAME: a for a in adapters},
                       student2_inputs=bundle["days"], settlement_contract=bundle["settlement"])
 
-    run(args.start, args.end, args.attack_days, args.data_dir, args.agents_dir, args.out, **extras)
+    try:
+        run(args.start, args.end, args.attack_days, args.data_dir, args.agents_dir, args.out, **extras)
+    finally:
+        if hasattr(extras.get("debate_client"), "close"):
+            extras["debate_client"].close()

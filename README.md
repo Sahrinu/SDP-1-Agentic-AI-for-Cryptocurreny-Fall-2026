@@ -198,9 +198,21 @@ The live target is strictly higher BTCUSDT at decision time +24h, with ties down
 Both reference and target use the last completed one-minute Binance close at or
 before the exact timestamp. It is a recent observed reference, not a tick-perfect
 execution guarantee. Only completed UTC daily candles feed daily price agents.
-The latest 1,100 closes support Long-term's 791-day minimum warmup. Every live
-forecast is an independent initially equal-coin Exchange; this dashboard does not
-pretend that its weights have learned from unresolved live outcomes.
+The latest 1,100 closes support Long-term's 791-day minimum warmup.
+
+**Live learning (persistent settlement).** Every live forecast is recorded in
+`outputs/dashboard/live_ledger.sqlite3` (`exchange/ledger.py`) with its reference
+price and each active agent's probability. On the next **Refresh market data** or
+**Generate 24h forecast** after a target time has passed, the dashboard fetches
+the settlement price with `market_data.live.target_quote` (the same completed
+one-minute close definition, at most two minutes before the target), pays out the
+bets with the `exchange/engine.py` rules and saves each agent's new coins. The
+next live forecast starts from those saved coins, so weights reflect only settled
+outcomes, never pending ones. Forecasts settle oldest first and exactly once; ties
+count as down; abstaining agents do not bet; an agent with no settled bet starts
+at 100 coins. If the price cannot be fetched, nothing changes and the reason is
+shown under `live_learning` in the forecast details. With a 20% cap, at least
+six active agents are needed before learned coins can make weights unequal.
 
 The synthetic replay uses the repository test fixtures and requires a checkout;
 the installed dashboard HTML is also included as package data.
@@ -248,6 +260,27 @@ orders are blocked. `--circuit-breaker` also enables the minimum-participation
 guard. Every new runner execution also saves
 `uncertainty.json`: missing forecasts are excluded, with circular seven-day block
 bootstrap Brier intervals. Small samples remain unreliable.
+
+**Debate as a fourth method.** `python -m experiments.run --debate ...` also runs
+the Bull/Bear/Judge debate (`experiments/debate.py`) every replay day over the same
+agent reports, and again on attack days. It costs 3 Gemini calls per day plus 3 per
+attack day. Results get a `debate` column; `debate_log.json` keeps every argument
+and `model_usage.json` the calls and tokens. A failed or invalid debate is left
+missing, never filled in.
+
+**Final results table.** After a run, combine everything into one table:
+
+```bash
+python -m experiments.report experiments/results \
+    --baselines outputs/baselines_capped --price-in 0.25 --price-out 1.50 \
+    --live-ledger outputs/dashboard/live_ledger.sqlite3
+```
+
+It writes `final_results.csv` and `final_results.md` with one row per method:
+Brier score and 95% interval, direction accuracy, attack shift, paper returns (if
+`--paper` was used), baseline returns and model calls, tokens and US$ per decision.
+`--price-in/--price-out` are US$ per million tokens for the model actually used;
+without them costs stay in tokens.
 
 Cost-matched trading baselines have their own command:
 
@@ -963,10 +996,10 @@ legacy aliases and packaged resources were checked outside the checkout.
 - Verify sustained live Betting odds availability on the demo network. The
   dashboard now captures a fresh public book and validates Gemini JSON output;
   missing/invalid streams abstain rather than borrowing REST quote timestamps.
-- Live dashboard forecasts currently start with equal initial coins. Demonstrate
-  learning using settled replay outcomes, or implement durable live settlement
-  before claiming cross-run live learning. With a 20% influence cap, at least
-  six active agents are needed to demonstrate unequal capped weights.
+- Live learning is implemented (`exchange/ledger.py`), but it needs several days
+  of real forecasts before any agent's coins differ meaningfully. Until then, use
+  settled replay outcomes to demonstrate learning. With a 20% influence cap, at
+  least six active agents are needed to demonstrate unequal capped weights.
 - Validate the Bull/Bear/Judge debate with Gemini and evaluate held-out forecast
   outcomes. Actual News/Mood responses were verified on 18 November 2026;
   successful response parsing does not establish forecast accuracy.
