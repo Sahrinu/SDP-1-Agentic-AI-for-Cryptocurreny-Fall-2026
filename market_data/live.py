@@ -106,6 +106,30 @@ def reference_quote(get=get_json):
             'retrieved_at':receipt.isoformat(),'source':'Binance BTCUSDT completed one-minute close'}
 
 
+def target_quote(target_time, get=get_json):
+    """Settlement price: last completed one-minute close at or before target_time.
+
+    Same definition as reference_quote, so a live forecast is settled the way it
+    was defined. Used by exchange.ledger.LiveLedger after the 24h window ends.
+    """
+    if target_time.tzinfo is None:
+        raise ValueError('Aware target time required')
+    target_ms = int(target_time.timestamp() * 1000)
+    if target_ms > now().timestamp() * 1000:
+        raise ValueError('Target time has not passed yet')
+    raw = get('https://api.binance.com/api/v3/klines?' + urlencode({
+        'symbol':'BTCUSDT','interval':'1m','endTime':target_ms,'limit':5}))
+    completed = [r for r in raw if int(r[6]) <= target_ms]
+    if not completed:
+        raise ValueError('No completed one-minute BTC bar at the target time')
+    bar = completed[-1]
+    price = float(bar[4])
+    if not 0 < price < float('inf'):
+        raise ValueError('Invalid target price')
+    return {'price':price,'bar_close_time':pd.to_datetime(bar[6],unit='ms',utc=True).isoformat(),
+            'retrieved_at':now().isoformat(),'source':'Binance BTCUSDT completed one-minute close'}
+
+
 def collect_news():
     """Fetch the current BTC news feed for a dashboard refresh or forecast."""
     from agents.specialists.news_specialist import _fetch_recent_btc_news

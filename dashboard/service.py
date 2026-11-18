@@ -75,7 +75,7 @@ def recent_news_snapshot(data, *, at):
     return 0 <= age <= NEWS_CACHE_SECONDS
 
 
-def forecast_snapshot(data, quote, *, client=None, decision_time=None, on_progress=None):
+def forecast_snapshot(data, quote, *, client=None, decision_time=None, on_progress=None, ledger=None):
     instant = decision_time or datetime.now(timezone.utc)
     if instant.tzinfo is None:
         raise ValueError('Aware decision time required')
@@ -125,14 +125,19 @@ def forecast_snapshot(data, quote, *, client=None, decision_time=None, on_progre
                 'status':'failed' if failed else 'forecasted' if audit['passed'] else 'abstained'})
     if on_progress is not None:
         on_progress({'event':'aggregation_started'})
-    exchange = Exchange(list(active))
+    # With a live ledger the Exchange starts from coins earned in settled live
+    # forecasts; without one every forecast starts from equal coins.
+    exchange = ledger.exchange_for(active) if ledger is not None else Exchange(list(active))
+    learning = ledger.summary() if ledger is not None else None
     combined = {'exchange':exchange.team_forecast(active),'vote':vote(active),'average':average(active)} if active else dict.fromkeys(('exchange','vote','average'))
     if on_progress is not None:
         on_progress({'event':'aggregation_completed','methods':combined})
     return {'id':uuid.uuid4().hex,'mode':'live','created_at':instant.isoformat(),
         'contract':contract,'quote':quote,'agents':results,'active_count':len(active),
         'weights':exchange.weights() if active else {},'cap_feasible':len(active)*.20 >= 1,
-        'methods':combined,'coins_basis':'Equal initial coins for this independent live forecast; no unearned historical learning',
+        'methods':combined,'coins':dict(exchange.coins),
+        'coins_basis':('Coins learned from '+str(learning['settled'])+' settled live forecasts; agents without a settled bet start at '+str(learning['start_coins'])
+                       if learning is not None else 'Equal initial coins for this independent live forecast; no unearned historical learning'),
         'usage':getattr(client,'usage',[]),
         'limitations':['Daily-feature rules are experimental and uncalibrated for an intraday rolling 24-hour target.',
             'The outcome is pending until target_time; daily/on-chain/macro publication delays remain visible.']}
