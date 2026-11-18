@@ -8,7 +8,7 @@ version = "0.1.0"
 description = "Shared Bitcoin specialist forecasts, risk controls and paper trading"
 readme = "README.md"
 requires-python = ">=3.11"
-dependencies = ["pandas>=2.2,<4"]
+dependencies = ["pandas>=2.2,<4", "python-dotenv>=1.1,<2"]
 
 [project.optional-dependencies]
 test = ["pytest>=9,<10"]

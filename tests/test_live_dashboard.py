@@ -11,7 +11,7 @@ from execution.paper_trading import PaperTrader
 from risk.durable_gateway import RiskGateway, RiskPolicy
 from risk.circuit_breaker import CircuitBreaker,constrained_action
 from risk.auditor import audit_forecast
-from market_data.live import collect_chain,reference_quote
+from market_data.live import collect_chain,collect_recent_bitcoin,reference_quote
 
 NOW=datetime(2026,11,15,10,tzinfo=timezone.utc)
 DAY='2026-11-15'
@@ -38,6 +38,49 @@ def test_completed_only_and_future_invariance(module):
     assert result==module.forecast(DAY,view)
     frame.drop(frame.index[-2],inplace=True)
     assert module.forecast(DAY,view)['data_missing']
+
+
+def test_intraday_collector_keeps_only_complete_consecutive_candles():
+    from urllib.parse import parse_qs,urlsplit
+    def rows(interval, *, gap=False):
+        step=timedelta(hours=1) if interval=='1h' else timedelta(minutes=1)
+        count=25 if interval=='1h' else 61
+        result=[]
+        for offset in range(-count-1,1):
+            if gap and interval=='1h' and offset==-20:
+                continue
+            opened=NOW+offset*step
+            close_time=opened+step-timedelta(milliseconds=1)
+            stamp=lambda value:int(value.timestamp()*1000)
+            result.append([stamp(opened),'100','102','99','101','10',
+                           stamp(close_time),'1000',20,'5','500','0'])
+        return result
+    def get(url):
+        interval=parse_qs(urlsplit(url).query)['interval'][0]
+        return rows(interval)
+    frames=collect_recent_bitcoin(get,observed_at=NOW)
+    assert len(frames['btc_hourly'])==25 and len(frames['btc_minute'])==61
+    assert all(frame.index[-1]<NOW for frame in frames.values())
+    with pytest.raises(ValueError):
+        collect_recent_bitcoin(lambda url:rows(parse_qs(urlsplit(url).query)['interval'][0],gap=True),
+                               observed_at=NOW)
+
+
+def test_chart_blends_daily_hourly_and_minute_without_future_bars():
+    hourly=pd.DataFrame({'close':[100+i*.2 for i in range(25)]},
+        index=pd.date_range(end=NOW-timedelta(milliseconds=1),periods=25,freq='h',tz='UTC'))
+    minute=pd.DataFrame({'close':[114+i*.01 for i in range(61)]},
+        index=pd.date_range(end=NOW-timedelta(milliseconds=1),periods=61,freq='min',tz='UTC'))
+    view={'btc_prices':prices(),'btc_hourly':hourly,'btc_minute':minute,'_decision_time':NOW}
+    combined=chart.forecast(DAY,view)
+    daily=chart.forecast(DAY,{'btc_prices':prices(),'_decision_time':NOW})
+    assert not combined['data_missing'] and combined['p_up']!=daily['p_up']
+    assert any('completed hourly candles' in item for item in combined['evidence'])
+    hourly.loc[NOW+timedelta(hours=1),'close']=1e99
+    minute.loc[NOW+timedelta(minutes=1),'close']=1e99
+    assert chart.forecast(DAY,view)==combined
+    minute.index=minute.index-timedelta(minutes=10)
+    assert chart.forecast(DAY,view)['data_missing']
 
 @pytest.mark.parametrize('module,key,fields',[(network,'network',{'active_addresses':100,'transactions':1000}),
                                            (miner,'miner',{'hash_rate':900,'fees_btc':10})])

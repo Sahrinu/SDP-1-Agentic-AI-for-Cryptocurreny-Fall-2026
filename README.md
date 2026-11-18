@@ -129,6 +129,16 @@ public evidence is shown, not private model reasoning. The activity trace is
 included in each saved forecast JSON. Interrupted runs distinguish unreached
 agents from returned abstentions. Forecast generation does not place a trade.
 
+Immediately before a live forecast, the dashboard also collects 25 completed
+Binance hourly candles and 61 completed minute candles. It saves the raw capture
+under `outputs/dashboard/intraday/`. These are the minimum close counts needed
+to calculate a 24h hourly return and a 60m minute return. The Chart agent combines
+those returns with the completed-daily trend inside **one vote**. Missing
+or stale intraday bars leave an explicit daily-only Chart result; the source status
+shows the collection failure. The 50/35/15 blend is an uncalibrated research rule,
+not evidence of improved accuracy. Historical CSV replays without archived
+intraday candles still use the original daily-only Chart rule.
+
 
 The interface uses a warm grey professional light theme and a market-terminal layout inspired by CoinMarketCap and
 TradingView: real BTC daily candlesticks, source volume, EMA overlays, range
@@ -138,20 +148,24 @@ research results and paper decisions stay separate from the market chart.
 Only retrieved values are plotted; missing price/volume statistics remain empty.
 It uses local HTML/CSS/JavaScript with no third-party chart scripts or trackers.
 
-**Gemini session key:** click **Connect Gemini** and paste the key into the masked
-field inside the local dashboard. It is held only in the running server's memory,
-not environment variables, files, SQLite, browser storage, saved forecasts or Git.
+**Gemini key:** set `GOOGLE_API_KEY` or `GEMINI_API_KEY` in the server's environment,
+or put one of those names in a project-root `.env` file before starting the dashboard.
+An existing server environment key takes precedence over `.env`; only Gemini keys
+are loaded from that file. The dashboard never sends the key to the browser.
+Alternatively, click **Connect Gemini** and paste the key into the masked field.
+That session override is held only in the running server's memory, not files,
+SQLite, browser storage, saved forecasts or Git.
 The browser clears the input after submission/closing. Only a configured flag and
 source are returned to the UI. The key is sent to Google when you explicitly run
 a Gemini forecast/debate. Setting it makes no validation/model request by itself.
-**Clear session key** removes the session override; an existing environment key
-remains available. Restarting the server clears the session override. Do not put
-keys in chat or commit them. See Google's [API key guidance](https://aistudio.google.com/docs/api-key).
+**Clear session key** removes the session override; an existing environment or
+loaded `.env` key remains available. Restarting the server clears the session
+override. Keep `.env` out of Git. See Google's [API key guidance](https://aistudio.google.com/docs/api-key).
 
 
 ```bash
 pip install -e '.[test,macro,specialists,live]'
-# Set GOOGLE_API_KEY or GEMINI_API_KEY privately in your local environment.
+# Set GOOGLE_API_KEY or GEMINI_API_KEY in your environment or project-root .env.
 # Optional: GEMINI_MODEL, COINGECKO_DEMO_API_KEY. Never commit keys.
 python -m dashboard
 ```
@@ -162,6 +176,12 @@ market data**, **Generate 24h forecast**, then **Record paper decision**. A sepa
 audited reports; it does not add three extra specialist votes. No refresh makes
 model calls or creates trades. Capture/configure inputs before the presentation;
 provider failure appears as an abstention rather than fabricated data.
+Refresh fetches Yahoo Bitcoin news. Forecast reuses that snapshot for up to two
+minutes; after that it fetches news again and archives the forecast-time copy in
+`outputs/dashboard/news/`. If the fresh fetch fails, the News specialist receives
+no old articles and abstains. Repeated forecast clicks within two minutes reuse
+the latest successful news fetch. Yahoo may rate-limit requests, and this reuse
+window does not guarantee a provider quota.
 
 The best demonstration pairs a fresh forecast (outcome due tomorrow) with a
 completed historical replay (outcomes visible immediately). **Replay real BTC history** runs the latest 60 settled days from the collected
@@ -309,7 +329,7 @@ voting agents either.
 
 | # | Specialist | Canonical implementation | Readiness and input |
 | --- | --- | --- | --- |
-| 1 | Chart | `agents/chart.py` | 70 completed BTC daily closes; EMA/MACD heuristic. Student 1 descriptive reports remain in `agents/specialists/` |
+| 1 | Chart | `agents/chart.py` | 70 completed BTC daily closes; live forecasts additionally use completed hourly/minute candles when captured. Student 1 descriptive reports remain in `agents/specialists/` |
 | 2 | Borrowing | `agents/borrowing.py` | Funding/OI CSV, six consecutive completed days |
 | 3 | Network | `agents/network.py` | Eight consecutive published active-address/transaction days; Coin Metrics collector |
 | 4 | Miner | `agents/miner.py` | Eight published hash-rate/fee days; measures health proxies, not actual miner sales |

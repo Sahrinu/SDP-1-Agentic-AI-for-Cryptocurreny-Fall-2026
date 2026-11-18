@@ -6,16 +6,17 @@ import json
 from pathlib import Path
 import secrets
 import threading
-from dashboard.credentials import SessionCredentials, parse_key_payload
+from dashboard.credentials import SessionCredentials, load_dashboard_environment, parse_key_payload
 from dashboard.activity import ForecastActivity
 
-from dashboard.service import forecast_snapshot,PaperStore,json_safe,market_snapshot
+from dashboard.service import forecast_snapshot,PaperStore,json_safe,market_snapshot,recent_news_snapshot
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
 def create_server(port=8765, *, root=ROOT, bind=True):
     root = Path(root)
+    load_dashboard_environment(root)
     credentials = SessionCredentials()
     activity = ForecastActivity()
     token = secrets.token_urlsafe(32)
@@ -35,12 +36,63 @@ def create_server(port=8765, *, root=ROOT, bind=True):
                     data.clear(); data.update(collected)
                     state.update(sources=sources,forecast=None,paper=None,debate=None,message='Collection finished. Inspect source status, then run forecast.')
             elif action == 'forecast':
-                from market_data.live import reference_quote
+                from market_data.live import collect_news, collect_recent_bitcoin, reference_quote
+                with lock:
+                    forecast_data = dict(data)
+                news_capture = None
+                if recent_news_snapshot(forecast_data, at=datetime.now(timezone.utc)):
+                    news_status = {'status':'collected','reused':True,
+                        'received_at':forecast_data['student2_news_observed_at']}
+                else:
+                    forecast_data.pop('student2_news_articles', None)
+                    forecast_data.pop('student2_news_observed_at', None)
+                    try:
+                        articles = collect_news()
+                        if not isinstance(articles, list) or not articles:
+                            raise ValueError('No BTC news articles returned')
+                        observed_at = datetime.now(timezone.utc).isoformat()
+                        capture_dir = root/'outputs/dashboard/news'
+                        capture_dir.mkdir(parents=True, exist_ok=True)
+                        destination = capture_dir/(datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S%fZ')+'-'+secrets.token_hex(4)+'.json')
+                        destination.write_text(json.dumps({'observed_at':observed_at,'articles':articles}, default=str, indent=2))
+                        news_capture = str(destination)
+                        forecast_data['student2_news_articles'] = articles
+                        forecast_data['student2_news_observed_at'] = observed_at
+                        with lock:
+                            data['student2_news_articles'] = articles
+                            data['student2_news_observed_at'] = observed_at
+                        news_status = {'status':'collected','received_at':observed_at}
+                    except Exception as exc:
+                        news_status = {'status':'unavailable','reason':type(exc).__name__}
+                        with lock:
+                            data.pop('student2_news_articles', None)
+                            data.pop('student2_news_observed_at', None)
+                with lock:
+                    state['sources'] = dict(state['sources'], news=news_status)
+                intraday_capture = None
+                if forecast_data.get('btc_prices') is not None:
+                    try:
+                        recent = collect_recent_bitcoin()
+                        capture_dir = (root/'outputs/dashboard/intraday'/
+                            (datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S%fZ')+'-'+secrets.token_hex(4)))
+                        capture_dir.mkdir(parents=True,exist_ok=False)
+                        for name, frame in recent.items():
+                            frame.to_csv(capture_dir/(name+'.csv'),index_label='close_time')
+                        forecast_data.update(recent)
+                        intraday_capture = str(capture_dir)
+                        intraday_status = {'status':'collected',
+                            'received_at':datetime.now(timezone.utc).isoformat()}
+                    except Exception as exc:
+                        intraday_status = {'status':'unavailable','reason':type(exc).__name__}
+                    with lock:
+                        state['sources'] = dict(state['sources'], btc_intraday=intraday_status)
                 client = None
                 if credentials.public_status()["configured"]:
                     from model_clients.demo_gemini import DemoGemini
                     client = DemoGemini(api_key=credentials.resolved_key())
-                result = forecast_snapshot(data,reference_quote(),client=client,on_progress=activity.record)
+                result = forecast_snapshot(forecast_data,reference_quote(),client=client,on_progress=activity.record)
+                result['intraday_capture'] = intraday_capture
+                result['news_capture'] = news_capture
                 activity.finish()
                 result["activity"] = activity.snapshot()
                 directory = root/'outputs/dashboard/forecasts'

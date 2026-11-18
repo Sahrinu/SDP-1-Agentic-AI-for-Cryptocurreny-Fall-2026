@@ -5,16 +5,101 @@ import re
 from pathlib import Path
 import pytest
 
-from dashboard.credentials import SessionCredentials, parse_key_payload
+from dashboard.credentials import SessionCredentials, load_dashboard_environment, parse_key_payload
 from dashboard.__main__ import create_server
-from dashboard.service import market_snapshot
+from dashboard.service import market_snapshot, recent_news_snapshot
 
 TEST_KEY='unit-test-session-value-not-a-real-key'
+
+
+def test_news_snapshot_reuse_window():
+    from datetime import datetime, timedelta, timezone
+    at = datetime(2026, 11, 18, 12, 0, tzinfo=timezone.utc)
+    sample = {'student2_news_articles':[{'title':'BTC news'}],
+        'student2_news_observed_at':(at-timedelta(seconds=119)).isoformat()}
+    assert recent_news_snapshot(sample, at=at)
+    sample['student2_news_observed_at'] = (at-timedelta(seconds=121)).isoformat()
+    assert not recent_news_snapshot(sample, at=at)
+    sample['student2_news_observed_at'] = (at+timedelta(seconds=1)).isoformat()
+    assert not recent_news_snapshot(sample, at=at)
+    sample['student2_news_observed_at'] = 'bad timestamp'
+    assert not recent_news_snapshot(sample, at=at)
+
+
+def test_forecast_reuses_recent_news_and_drops_it_after_failed_refetch(local_http,monkeypatch):
+    from datetime import datetime, timedelta, timezone
+    import time
+    import dashboard.__main__ as server_module
+    import market_data.live as live
+
+    observed = {'at':datetime.now(timezone.utc)}
+    fetched = []
+    seen = []
+    article = {'title':'BTC news from unit test','evidence_id':'unit-test-article'}
+    def collect_snapshot(*args, **kwargs):
+        return ({'student2_news_articles':[article],
+                 'student2_news_observed_at':observed['at'].isoformat()},
+                {'news':{'status':'collected','received_at':observed['at'].isoformat()}})
+    def collect_news():
+        fetched.append(True)
+        raise RuntimeError('Yahoo unavailable in unit test')
+    def forecast(data, quote, *, client, on_progress):
+        seen.append(data)
+        return {'id':'news-test-'+str(len(seen))}
+    monkeypatch.setattr(live,'collect_snapshot',collect_snapshot)
+    monkeypatch.setattr(live,'collect_news',collect_news)
+    monkeypatch.setattr(live,'reference_quote',lambda:{'source':'unit-test-only'})
+    monkeypatch.setattr(server_module,'forecast_snapshot',forecast)
+
+    def run(action):
+        code,_,_=local_http('POST','/api/'+action,headers={'X-Demo-Token':local_http.token})
+        assert code == 202
+        deadline = time.monotonic()+5
+        while time.monotonic() < deadline:
+            _,payload,_ = local_http('GET','/api/state')
+            state = json.loads(payload)
+            if not state['busy']:
+                return state
+            time.sleep(.005)
+        pytest.fail(action+' timed out')
+
+    run('collect')
+    state = run('forecast')
+    assert not fetched and seen[-1]['student2_news_articles'] == [article]
+    assert state['sources']['news']['reused'] is True
+    observed['at'] = datetime.now(timezone.utc)-timedelta(minutes=3)
+    run('collect')
+    state = run('forecast')
+    assert len(fetched) == 1 and 'student2_news_articles' not in seen[-1]
+    assert state['sources']['news']['status'] == 'unavailable'
 
 @pytest.fixture
 def clean_env(monkeypatch):
     monkeypatch.delenv('GOOGLE_API_KEY',raising=False)
     monkeypatch.delenv('GEMINI_API_KEY',raising=False)
+
+
+def test_project_env_supplies_gemini_key_without_loading_other_settings(tmp_path,monkeypatch,clean_env):
+    import os
+    key='unit-test-file-value-not-a-real-key'
+    (tmp_path/'.env').write_text(
+        f'GEMINI_API_KEY={key}\nCOINGECKO_DEMO_API_KEY=unrelated-test-value\n',
+        encoding='utf-8')
+    monkeypatch.delenv('COINGECKO_DEMO_API_KEY',raising=False)
+    server=create_server(8765,root=tmp_path,bind=False)
+    server.server_close()
+    assert SessionCredentials().resolved_key()==key
+    assert os.environ.get('COINGECKO_DEMO_API_KEY') is None
+    assert key not in json.dumps(SessionCredentials().public_status())
+
+
+def test_server_environment_takes_precedence_over_project_env(tmp_path,monkeypatch,clean_env):
+    import os
+    (tmp_path/'.env').write_text('GEMINI_API_KEY=file-test-value\n',encoding='utf-8')
+    monkeypatch.setenv('GOOGLE_API_KEY','host-test-value')
+    load_dashboard_environment(tmp_path)
+    assert SessionCredentials().resolved_key()=='host-test-value'
+    assert os.environ.get('GEMINI_API_KEY') is None
 
 @pytest.fixture
 def local_http(tmp_path,clean_env):
@@ -147,6 +232,7 @@ def test_http_progress_is_visible_before_the_forecast_finishes(local_http,monkey
     from agents.registry import CATALOG
     entered,release=threading.Event(),threading.Event()
     monkeypatch.setattr(live,'reference_quote',lambda:{'source':'unit-test-only'})
+    monkeypatch.setattr(live,'collect_news',lambda:[{'title':'Unit test BTC article'}])
     def forecast(data,quote,*,client,on_progress):
         for index,spec in enumerate(CATALOG):
             on_progress({'event':'agent_started','role':spec.name})

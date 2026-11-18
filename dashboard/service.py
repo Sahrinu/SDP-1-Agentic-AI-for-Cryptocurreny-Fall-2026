@@ -56,6 +56,25 @@ def configured():
     return bool(os.environ.get('GOOGLE_API_KEY') or os.environ.get('GEMINI_API_KEY'))
 
 
+NEWS_CACHE_SECONDS = 120
+
+
+def recent_news_snapshot(data, *, at):
+    """Return whether saved news is recent enough to reuse for Forecast."""
+    articles = data.get('student2_news_articles')
+    stamp = data.get('student2_news_observed_at')
+    if not isinstance(articles, list) or not articles or not isinstance(stamp, str):
+        return False
+    try:
+        observed = datetime.fromisoformat(stamp)
+    except ValueError:
+        return False
+    if observed.tzinfo is None:
+        return False
+    age = (at - observed.astimezone(timezone.utc)).total_seconds()
+    return 0 <= age <= NEWS_CACHE_SECONDS
+
+
 def forecast_snapshot(data, quote, *, client=None, decision_time=None, on_progress=None):
     instant = decision_time or datetime.now(timezone.utc)
     if instant.tzinfo is None:

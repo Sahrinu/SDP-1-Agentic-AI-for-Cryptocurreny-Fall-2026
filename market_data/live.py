@@ -5,6 +5,7 @@ import json
 import os
 from urllib.parse import urlencode
 import pandas as pd
+from market_data.bitcoin.binance import parse_candles
 from market_data.http import get_json
 
 
@@ -33,6 +34,39 @@ def collect_bitcoin(get=get_json):
     if frame.empty:
         raise ValueError('No completed Bitcoin bars')
     return frame.set_index('date').sort_index()
+
+
+def collect_recent_bitcoin(get=get_json, *, observed_at=None):
+    """Capture completed hourly and minute BTCUSDT bars for a live forecast.
+
+    Indexes are actual Binance close timestamps. A return over N intervals needs
+    N+1 closes: 25 hourly closes for 24 hours and 61 minute closes for 60 minutes.
+    """
+    instant = observed_at or now()
+    if instant.tzinfo is None:
+        raise ValueError('Intraday capture time must include a timezone')
+    instant = instant.astimezone(timezone.utc)
+    as_of_ms = int(instant.timestamp() * 1000)
+    frames = {}
+    for key, interval, count, period_ms in (
+            ('btc_hourly', '1h', 25, 3_600_000),
+            ('btc_minute', '1m', 61, 60_000)):
+        url = 'https://api.binance.com/api/v3/klines?' + urlencode({
+            'symbol': 'BTCUSDT', 'interval': interval, 'limit': count + 2})
+        candles = parse_candles(get(url), as_of_ms=as_of_ms)[-count:]
+        if len(candles) != count or any(
+                b.open_time_ms - a.open_time_ms != period_ms
+                for a, b in zip(candles, candles[1:])):
+            raise ValueError(f'Need {count} consecutive completed {interval} BTC candles')
+        frame = pd.DataFrame([{
+            'close_time': pd.to_datetime(c.close_time_ms, unit='ms', utc=True),
+            'open': float(c.open), 'high': float(c.high), 'low': float(c.low),
+            'close': float(c.close), 'volume': float(c.volume_btc),
+        } for c in candles]).set_index('close_time')
+        if (instant - frame.index[-1]).total_seconds() > (period_ms / 1000 + 120):
+            raise ValueError(f'Latest completed {interval} BTC candle is stale')
+        frames[key] = frame
+    return frames
 
 
 def collect_chain(get=get_json):
@@ -70,6 +104,12 @@ def reference_quote(get=get_json):
         raise ValueError('Invalid reference price')
     return {'price':price,'bar_close_time':pd.to_datetime(bar[6],unit='ms',utc=True).isoformat(),
             'retrieved_at':receipt.isoformat(),'source':'Binance BTCUSDT completed one-minute close'}
+
+
+def collect_news():
+    """Fetch the current BTC news feed for a dashboard refresh or forecast."""
+    from agents.specialists.news_specialist import _fetch_recent_btc_news
+    return _fetch_recent_btc_news()
 
 
 def collect_snapshot(directory, *, input_directory=None):
@@ -110,10 +150,7 @@ def collect_snapshot(directory, *, input_directory=None):
     value = attempt('macro', macro)
     if value is not None:
         data['macro'] = value
-    def news():
-        from agents.specialists.news_specialist import _fetch_recent_btc_news
-        return _fetch_recent_btc_news()
-    value = attempt('news', news)
+    value = attempt('news', collect_news)
     if value:
         data['student2_news_articles'] = value
         data['student2_news_observed_at'] = now().isoformat()

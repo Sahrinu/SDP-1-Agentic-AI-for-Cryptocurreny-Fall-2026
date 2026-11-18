@@ -1,6 +1,22 @@
 """Process-session credentials, deliberately separate from serializable app state."""
 import os
 import threading
+from pathlib import Path
+
+
+def load_dashboard_environment(root):
+    """Load only Gemini keys from the dashboard's project-root .env file."""
+    if os.environ.get('GOOGLE_API_KEY') or os.environ.get('GEMINI_API_KEY'):
+        return
+    path = Path(root) / '.env'
+    if not path.is_file():
+        return
+    from dotenv import dotenv_values
+    values = dotenv_values(path)
+    for name in ('GOOGLE_API_KEY', 'GEMINI_API_KEY'):
+        value = values.get(name)
+        if isinstance(value, str) and value.strip():
+            os.environ.setdefault(name, value.strip())
 
 
 def parse_key_payload(raw):
