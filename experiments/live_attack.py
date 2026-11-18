@@ -57,15 +57,49 @@ def latest_forecast(folder=ROOT / "outputs/dashboard/forecasts"):
     return files[-1]
 
 
-def news_snapshot(forecast):
-    """The exact articles the forecast used, archived by the dashboard."""
+NEWS_REUSE_SECONDS = 120   # the dashboard reuses collected news for up to two minutes
+
+
+def _read_capture(capture):
+    """A forecast-time news file, or a collect snapshot folder."""
+    capture = Path(capture)
+    if capture.is_dir():
+        articles = capture / "student2_news_articles.json"
+        observed = capture / "student2_news_observed_at.json"
+        if not articles.exists() or not observed.exists():
+            return None
+        return (json.loads(articles.read_text(encoding="utf-8")),
+                json.loads(observed.read_text(encoding="utf-8")))
+    saved = json.loads(capture.read_text(encoding="utf-8"))
+    return saved.get("articles"), saved.get("observed_at")
+
+
+def news_snapshot(forecast, snapshots=None):
+    """The exact articles the forecast used, archived by the dashboard.
+
+    Forecasts that reused the news from the preceding Refresh (within two
+    minutes) were saved before the dashboard recorded that folder; for those,
+    the collect snapshot whose news was observed within the reuse window before
+    the decision is used.
+    """
+    prediction = datetime.fromisoformat(forecast["contract"]["prediction_time"])
     capture = forecast.get("news_capture")
-    if not capture or not Path(capture).exists():
+    found = _read_capture(capture) if capture and Path(capture).exists() else None
+    if found is None and not capture:
+        folder = Path(snapshots) if snapshots else ROOT / "outputs/dashboard/snapshots"
+        for candidate in sorted(folder.glob("*"), reverse=True) if folder.exists() else []:
+            saved = _read_capture(candidate) if candidate.is_dir() else None
+            if not saved or not saved[1]:
+                continue
+            age = (prediction - datetime.fromisoformat(saved[1])).total_seconds()
+            if 0 <= age <= NEWS_REUSE_SECONDS:
+                found = saved
+                break
+    if not found or not found[0] or not found[1]:
         raise ValueError("This forecast has no archived news snapshot to attack")
-    saved = json.loads(Path(capture).read_text(encoding="utf-8"))
-    if not saved.get("articles") or not saved.get("observed_at"):
-        raise ValueError("Archived news snapshot is empty")
-    return saved["articles"], saved["observed_at"]
+    if datetime.fromisoformat(found[1]) > prediction:
+        raise ValueError("Archived news was observed after the forecast")
+    return found[0], found[1]
 
 
 def news_view(forecast, articles, observed_at):

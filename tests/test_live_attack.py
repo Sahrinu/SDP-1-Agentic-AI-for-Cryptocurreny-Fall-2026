@@ -96,6 +96,37 @@ class LiveAttackTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 run(path, fake_news_agent(), out_root=Path(folder) / "attacks")
 
+    def test_reused_news_found_in_collect_snapshot(self):
+        from experiments.live_attack import news_snapshot
+        with tempfile.TemporaryDirectory() as folder:
+            forecast = json.loads(saved_forecast(folder).read_text())
+            forecast["news_capture"] = None             # forecast reused the Refresh news
+            snapshots = Path(folder) / "snapshots"
+            for name, observed in (("old", "2026-11-18T14:30:00+00:00"),       # too early
+                                   ("good", "2026-11-18T14:40:42+00:00"),      # 11 s before
+                                   ("zlate", "2026-11-18T14:45:00+00:00")):    # after decision
+                d = snapshots / name
+                d.mkdir(parents=True)
+                (d / "student2_news_articles.json").write_text(json.dumps([{"evidence_id": name}]))
+                (d / "student2_news_observed_at.json").write_text(json.dumps(observed))
+            articles, observed = news_snapshot(forecast, snapshots)
+            self.assertEqual(articles, [{"evidence_id": "good"}])
+            (snapshots / "good" / "student2_news_observed_at.json").write_text(
+                json.dumps("2026-11-18T14:20:00+00:00"))
+            with self.assertRaises(ValueError):
+                news_snapshot(forecast, snapshots)
+
+    def test_dashboard_snapshot_folder_as_capture(self):
+        from experiments.live_attack import news_snapshot
+        with tempfile.TemporaryDirectory() as folder:
+            forecast = json.loads(saved_forecast(folder).read_text())
+            d = Path(folder) / "snap"
+            d.mkdir()
+            (d / "student2_news_articles.json").write_text(json.dumps([{"evidence_id": "x"}]))
+            (d / "student2_news_observed_at.json").write_text(json.dumps("2026-11-18T14:40:00+00:00"))
+            forecast["news_capture"] = str(d)
+            self.assertEqual(news_snapshot(forecast)[0], [{"evidence_id": "x"}])
+
     def test_final_table_includes_live_attacks(self):
         from experiments.report import build
         from experiments.run import ROOT, run as replay

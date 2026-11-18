@@ -28,6 +28,7 @@ def create_server(port=8765, *, root=ROOT, bind=True):
     store = PaperStore(root/'outputs/dashboard/paper.sqlite3')
     state['paper'] = store.latest_decision()
     ledger = LiveLedger(root/'outputs/dashboard/live_ledger.sqlite3')
+    latest_snapshot = {'directory':None}  # where the last collect saved its inputs
     state['learning'] = ledger.summary()
     def settle_live():
         # Pay out every live forecast whose 24h window has ended, oldest first.
@@ -48,6 +49,7 @@ def create_server(port=8765, *, root=ROOT, bind=True):
                 from market_data.live import collect_snapshot
                 directory = root/'outputs/dashboard/snapshots'/datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S%fZ')
                 collected,sources = collect_snapshot(directory, input_directory=root/"data")
+                latest_snapshot['directory'] = str(directory)
                 settle_live()
                 with lock:
                     data.clear(); data.update(collected)
@@ -61,6 +63,8 @@ def create_server(port=8765, *, root=ROOT, bind=True):
                 if recent_news_snapshot(forecast_data, at=datetime.now(timezone.utc)):
                     news_status = {'status':'collected','reused':True,
                         'received_at':forecast_data['student2_news_observed_at']}
+                    # Record where the reused articles are archived, for later attack tests.
+                    news_capture = latest_snapshot['directory']
                 else:
                     forecast_data.pop('student2_news_articles', None)
                     forecast_data.pop('student2_news_observed_at', None)
