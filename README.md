@@ -273,7 +273,8 @@ missing, never filled in.
 ```bash
 python -m experiments.report experiments/results \
     --baselines outputs/baselines_capped --price-in 0.25 --price-out 1.50 \
-    --live-ledger outputs/dashboard/live_ledger.sqlite3
+    --live-ledger outputs/dashboard/live_ledger.sqlite3 \
+    --live-attacks outputs/live_attacks/all_shifts.csv
 ```
 
 It writes `final_results.csv` and `final_results.md` with one row per method:
@@ -281,6 +282,26 @@ Brier score and 95% interval, direction accuracy, attack shift, paper returns (i
 `--paper` was used), baseline returns and model calls, tokens and US$ per decision.
 `--price-in/--price-out` are US$ per million tokens for the model actually used;
 without them costs stay in tokens.
+
+**Team-level fake-news test on live forecasts.** `experiments/news_robustness.py`
+measures how much the News agent itself moves. `experiments/live_attack.py` answers
+the research question at team level: it takes a saved dashboard forecast, re-asks
+the News agent on that forecast's archived news snapshot, once clean and once with
+a fake article (paired, order alternating), keeps every other agent's saved
+forecast, recomputes Contrarian, and reports how far the Exchange (with the coins
+it actually had), vote, average and optionally debate moved:
+
+```bash
+python -m experiments.live_attack --latest --attack all --repeats 2
+```
+
+Each pair costs 2 Gemini calls (`--debate` adds 6). Results go to
+`outputs/live_attacks/<forecast>-<run>/` and are appended to
+`outputs/live_attacks/all_shifts.csv`; pass that file to `experiments.report`
+with `--live-attacks` to add a live attack column to the final table. A forecast
+whose News agent abstains on either arm is recorded as not comparable. Daily
+routine until the report: open the dashboard, **Refresh market data** (settles due
+forecasts), **Generate 24h forecast**, then run the command above.
 
 Cost-matched trading baselines have their own command:
 

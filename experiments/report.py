@@ -9,6 +9,8 @@ final_results.md with one row per method:
   trading:    paper return on clean and attacked days (if --paper was used)
   baselines:  capped buy-and-hold and SMA 20/50 returns (if --baselines is given)
   cost:       model calls and tokens per decision, and US$ if prices are given
+  live attack: mean shift of each method on saved live forecasts
+              (experiments/live_attack.py), if --live-attacks is given
 
 Nothing is recomputed from scratch and nothing is invented: a value that a run
 did not produce stays empty.
@@ -16,7 +18,8 @@ did not produce stays empty.
 Usage:
   python -m experiments.report experiments/results
   python -m experiments.report experiments/results --baselines outputs/baselines_capped \\
-      --price-in 0.25 --price-out 1.50 --live-ledger outputs/dashboard/live_ledger.sqlite3
+      --price-in 0.25 --price-out 1.50 --live-ledger outputs/dashboard/live_ledger.sqlite3 \\
+      --live-attacks outputs/live_attacks/all_shifts.csv
 """
 import argparse
 import json
@@ -44,13 +47,18 @@ def _read_json(path):
     return json.loads(path.read_text(encoding="utf-8")) if path.exists() else None
 
 
-def build(run_dir, *, baselines_dir=None, price_in=None, price_out=None, live_ledger=None):
+def build(run_dir, *, baselines_dir=None, price_in=None, price_out=None, live_ledger=None,
+          live_attacks=None):
     run_dir = Path(run_dir)
     summary = pd.read_csv(run_dir / "summary.csv")
     uncertainty = _read_json(run_dir / "uncertainty.json") or {}
     usage = _read_json(run_dir / "model_usage.json")
     paper_path = run_dir / "paper" / "summary.csv"
     paper = pd.read_csv(paper_path) if paper_path.exists() else None
+    live = None
+    if live_attacks is not None and Path(live_attacks).exists():
+        live = pd.read_csv(live_attacks)
+        live = live[live["comparable"].astype(str).str.lower() == "true"]
 
     rows = []
     for line in summary.to_dict(orient="records"):
@@ -67,6 +75,11 @@ def build(run_dir, *, baselines_dir=None, price_in=None, price_out=None, live_le
             "max_attack_shift": _num(line.get("max_attack_shift")),
             "comparable_attack_days": line.get("comparable_attack_days"),
         }
+        if live is not None:
+            shifts = live.loc[live["method"] == method, "shift"].astype(float)
+            row["live_attack_mean_shift"] = _num(shifts.mean()) if len(shifts) else None
+            row["live_attack_pairs"] = int(len(shifts))
+            row["live_forecasts_attacked"] = int(live.loc[live["method"] == method, "forecast_id"].nunique())
         if paper is not None:
             for scenario in sorted(paper["scenario"].unique()):
                 match = paper[(paper["method"] == method) & (paper["scenario"] == scenario)]
@@ -109,6 +122,9 @@ def build(run_dir, *, baselines_dir=None, price_in=None, price_out=None, live_le
     if price_in is None or price_out is None:
         notes.append("Costs are shown as model calls and tokens only; pass --price-in and --price-out "
                      "(US$ per million tokens) to convert them to dollars.")
+    if live_attacks is not None and Path(live_attacks).exists():
+        notes.append("Live attack shift: same saved live forecast, News agent re-asked clean and with a fake "
+                     "article; other agents fixed. Paired, so model noise is not counted as attack effect.")
     notes.append("Brier: lower is better (0.25 = always saying 50%). Attack shift: lower = harder to fool. "
                  "Intervals are 95% block-bootstrap ranges and are unreliable on small samples.")
     return table, notes
@@ -134,9 +150,11 @@ def main():
     parser.add_argument("--price-in", type=float, help="US$ per million input tokens")
     parser.add_argument("--price-out", type=float, help="US$ per million output tokens")
     parser.add_argument("--live-ledger", help="Path to outputs/dashboard/live_ledger.sqlite3")
+    parser.add_argument("--live-attacks", help="Path to outputs/live_attacks/all_shifts.csv")
     args = parser.parse_args()
     table, notes = build(args.run_dir, baselines_dir=args.baselines, price_in=args.price_in,
-                         price_out=args.price_out, live_ledger=args.live_ledger)
+                         price_out=args.price_out, live_ledger=args.live_ledger,
+                         live_attacks=args.live_attacks)
     write(table, notes, args.run_dir)
     with pd.option_context("display.width", 200, "display.max_columns", 30):
         print(table.to_string(index=False))
