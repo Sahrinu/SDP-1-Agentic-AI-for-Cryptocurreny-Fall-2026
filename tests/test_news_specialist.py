@@ -257,4 +257,5 @@ def test_run_news_specialist_uses_structured_output_when_available():
 
     assert isinstance(result, NewsSpecialistResult)
     assert result.data_status == "sufficient_data"
-    assert llm.bound_schema is NewsSpecialistResult
+    assert issubclass(llm.bound_schema, NewsSpecialistResult)
+    assert llm.bound_schema.model_json_schema()["properties"]["agent"]["const"] == "News Specialist"

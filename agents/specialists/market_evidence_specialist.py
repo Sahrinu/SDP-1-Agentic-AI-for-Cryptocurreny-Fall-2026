@@ -58,6 +58,13 @@ class ModelEstimate(BaseModel):
         return self
 
 
+def parse_model_estimate(payload):
+    """Validate either structured output or the JSON text returned by a bridge."""
+    if isinstance(payload, ModelEstimate):
+        return payload
+    return ModelEstimate.model_validate(parse_model_object(payload))
+
+
 def prepare_evidence(observation, prediction, target, *, price_source, reference_price_definition):
     """Validate an actual saved frame and expose differences as features, not exclusions."""
     prediction, target = _datetime(prediction), _datetime(target)
@@ -65,6 +72,8 @@ def prepare_evidence(observation, prediction, target, *, price_source, reference
         raise ValueError('Forecast must span exactly 24 hours')
     if not all(isinstance(v,str) and v.strip() for v in (price_source,reference_price_definition)):
         raise ValueError('Explicit target price source and reference convention are required')
+    if isinstance(observation, dict) and observation.get('provider') == 'kalshi':
+        return _kalshi_features(observation, prediction, target, price_source, reference_price_definition)
     if not isinstance(observation,dict) or observation.get('observation_status') != 'book_observed':
         raise ValueError('A successful saved book observation is required')
     market, event, quote = observation['market'], observation['raw_book_event'], observation['quote']
@@ -77,11 +86,12 @@ def prepare_evidence(observation, prediction, target, *, price_source, reference
     if observation.get('mode') != 'live_read_only_observation':
         raise ValueError('Observation must be explicitly marked as a live read-only capture')
     oracle = market.get('priceOracleMetadata')
-    if isinstance(oracle,dict) and (oracle.get('ticker') not in (None,'BTCUSDT') or oracle.get('chartSource') not in (None,'binance')):
+    chainlink = isinstance(oracle,dict) and oracle.get('chartSource') == 'chainlink'
+    if not chainlink and isinstance(oracle,dict) and (oracle.get('ticker') not in (None,'BTCUSDT') or oracle.get('chartSource') not in (None,'binance')):
         raise ValueError('Market oracle metadata conflicts with Binance BTC/USDT')
     metadata = market.get('metadata')
     chart = metadata.get('chart') if isinstance(metadata,dict) else None
-    if isinstance(chart,dict) and (chart.get('symbol') not in (None,'BTCUSDT') or chart.get('source') not in (None,'binance')):
+    if not chainlink and isinstance(chart,dict) and (chart.get('symbol') not in (None,'BTCUSDT') or chart.get('source') not in (None,'binance')):
         raise ValueError('Market chart metadata conflicts with Binance BTC/USDT')
     received = _datetime(quote['received_at'])
     # Availability must precede prediction. Old saved results cannot silently become new forecasts.
@@ -89,8 +99,14 @@ def prepare_evidence(observation, prediction, target, *, price_source, reference
         raise ValueError('Observation is after prediction or older than five minutes')
     threshold = None
     try:
-        start,end,tie = _rules(market)
+        if chainlink:
+            from market_data.prediction_markets.limitless_targeted_discovery import validate_selected
+            start,end,tie = validate_selected(market, prediction)
+        else:
+            start,end,tie = _rules(market)
     except ValueError:
+        if chainlink:
+            raise
         from market_data.prediction_markets.threshold_market_evidence import validate_threshold, read_threshold_book
         parent=observation.get('parent_market')
         if isinstance(parent,dict) and parent.get('synthetic') is True:
@@ -107,21 +123,25 @@ def prepare_evidence(observation, prediction, target, *, price_source, reference
             raise ValueError('Market metadata conflicts with resolution rules')
     if quote != checked:
         raise ValueError('Quote summary does not match the exact saved book frame')
+    market_source = 'chainlink:BTC/USD' if chainlink else 'binance:BTC/USDT'
+    market_convention = '60s_twap' if chainlink else '1m_candle_high' if threshold is not None else '1m_candle_close'
+    market_event = ('endpoint TWAP rises or ties' if chainlink else
+                    'any candle high reaches threshold' if threshold is not None else 'endpoint close rises')
     features = {
         'target': {'prediction_time':prediction.isoformat(),'target_time':target.isoformat(),
                    'price_source':price_source,'reference_price_definition':reference_price_definition,
                    'tie_definition':'down','event':'target price strictly greater than prediction price'},
         'evidence': [{'evidence_id':'market-book-001','market_slug':market['slug'],
-                      'market_price_source':'binance:BTC/USDT',
-                      'market_price_convention':'1m_candle_high' if threshold is not None else '1m_candle_close',
-                      'market_event':'any candle high reaches threshold' if threshold is not None else 'endpoint close rises',
+                      'market_price_source':market_source,
+                      'market_price_convention':market_convention,
+                      'market_event':market_event,
                       'market_threshold':threshold,
                       'market_start':start.isoformat(),'market_end':end.isoformat(),'market_tie_rule':tie,
                       'elapsed_market_hours':(prediction-start).total_seconds()/3600,
                       'remaining_market_hours':(end-prediction).total_seconds()/3600,
                       'window_matches_target':start==prediction and end==target,
-                      'source_matches_target':price_source=='binance:BTC/USDT',
-                      'reference_matches_target':threshold is None and reference_price_definition=='1m_candle_close',
+                      'source_matches_target':price_source==market_source,
+                      'reference_matches_target':reference_price_definition==market_convention and threshold is None,
                       'tie_matches_target':tie=='down',
                       **{k:checked[k] for k in ('best_bid','best_ask','spread','yes_payout_midpoint',
                          'displayed_bid_shares','displayed_ask_shares','provider_event_time','received_at')}}],
@@ -148,13 +168,96 @@ def prepare_evidence(observation, prediction, target, *, price_source, reference
     return features
 
 
+def _kalshi_features(observation, prediction, target, price_source, reference_price_definition):
+    from market_data.prediction_markets.kalshi_live import market_terms, trade_quote
+
+    market = observation['market']
+    quote = observation['quote']
+    if (observation.get('observation_status') != 'trade_observed'
+            or observation.get('mode') != 'live_read_only_observation'
+            or observation.get('synthetic') or market.get('synthetic')):
+        raise ValueError('A live Kalshi trade observation is required')
+    ticker, end, threshold = market_terms(market)
+    received = _datetime(quote['received_at'])
+    if not timedelta(0) <= prediction - received <= timedelta(minutes=5) or prediction >= end:
+        raise ValueError('Kalshi trade observation is stale, future-dated, or expired')
+    if quote != trade_quote(market, observation['raw_trade'], quote['received_at']):
+        raise ValueError('Kalshi trade summary conflicts with its source trade')
+    return {
+        'target': {'prediction_time': prediction.isoformat(), 'target_time': target.isoformat(),
+                   'price_source': price_source, 'reference_price_definition': reference_price_definition,
+                   'tie_definition': 'down', 'event': 'target price strictly greater than prediction price'},
+        'evidence': [{
+            'evidence_id': 'kalshi-trade-001', 'market_provider': 'Kalshi', 'market_ticker': ticker,
+            'market_price_source': 'CF Benchmarks Bitcoin Real-Time Index (BRTI)',
+            'market_price_convention': 'average of the final 60 seconds',
+            'market_event': 'BTC index fixing strictly exceeds a fixed USD threshold',
+            'market_threshold': float(threshold), 'market_start': None, 'market_end': end.isoformat(),
+            'market_tie_rule': 'threshold equality resolves No', **quote,
+        }],
+        'limitations': [
+            'The Kalshi trade is for a fixed threshold at a daily fixing, while the target compares two Binance prices 24 hours apart.',
+            'The YES trade price is a historical execution price. No bid, ask or midpoint was observed.',
+            'Any estimate derived from this evidence is uncalibrated.',
+        ],
+    }
+
+
+def forecast_kalshi_with_context(observation, prediction, target, *, price_source,
+                                 reference_price_definition, reference_price, hourly_bars):
+    """Estimate directional probability from a fresh threshold trade and realized volatility."""
+    import math
+    from statistics import NormalDist, stdev
+    import pandas as pd
+
+    features = prepare_evidence(observation, prediction, target, price_source=price_source,
+                                reference_price_definition=reference_price_definition)
+    trade = features['evidence'][0]
+    if not isinstance(hourly_bars, pd.DataFrame) or 'close' not in hourly_bars:
+        raise ValueError('Completed Binance hourly candles are unavailable')
+    closes = hourly_bars['close'].tail(25)
+    if (len(closes) != 25 or not isinstance(closes.index, pd.DatetimeIndex)
+            or closes.index.tz is None
+            or not timedelta(0) <= prediction - closes.index[-1] <= timedelta(minutes=62)
+            or any(b - a != timedelta(hours=1) for a, b in zip(closes.index, closes.index[1:]))):
+        raise ValueError('Need 25 consecutive, recent completed Binance hourly closes')
+    spot = float(reference_price)
+    values = [float(price) for price in closes]
+    if not all(math.isfinite(price) and price > 0 for price in [spot, *values]):
+        raise ValueError('Invalid Binance closing price')
+    volatility = stdev(math.log(b) - math.log(a) for a, b in zip(values, values[1:]))
+    if volatility <= 0:
+        raise ValueError('Binance hourly volatility is zero')
+    fixing_hours = (_datetime(trade['market_end']) - prediction).total_seconds() / 3600
+    normal = NormalDist()
+    # Infer the cumulative return to the fixing from the threshold and trade price.
+    # Carry that cumulative shift into the 24h distribution without scaling up its drift rate.
+    market_shift = (math.log(trade['market_threshold']) - math.log(spot)
+                    + volatility * math.sqrt(fixing_hours) * normal.inv_cdf(trade['yes_trade_price']))
+    probability = normal.cdf(market_shift / (volatility * math.sqrt(24)))
+    return NewsSpecialistResult(
+        agent=NAME, prediction_time=prediction, target_time=target,
+        probability_up=probability, data_status='sufficient_data',
+        explanation=(f"Kalshi trade price {trade['yes_trade_price']:.3f} for BTC above "
+                     f"${trade['market_threshold']:,.2f} at {trade['market_end']}. "
+                     f"Binance reference ${spot:,.2f}, hourly realized volatility {volatility:.3%}. "
+                     "The estimate assumes normal log returns and carries the market-implied cumulative "
+                     "shift to the Kalshi fixing into the Binance 24-hour distribution."),
+        evidence_ids=[trade['evidence_id'], 'binance-hourly-returns', 'binance-reference-close'],
+        limitations=[*features['limitations'],
+                     'Assumes the Kalshi execution price approximates its threshold event probability, '
+                     'the CF Benchmarks and Binance prices have negligible basis, and hourly volatility persists.'],
+    )
+
+
 def build_prompt(features):
     return (
         'You are an experimental Bitcoin market-evidence forecasting specialist. '
         'Estimate the probability of the EXACT target event in target, using only the supplied evidence. '
         'The market contract is a FEATURE, not an equivalent target. The YES payout midpoint is the '
         'average of the best bid and ask: a payout price for the stated contract, not an observed '
-        'conditional probability and not necessarily a calibrated probability. Explicitly explain how its window and tie '
+        'conditional probability and not necessarily a calibrated probability. If the evidence is a completed trade, '
+        'use its execution price and timestamp and do not infer a bid or ask. Explicitly explain how its window and tie '
         'rule differ. Never copy or mechanically rescale that price to a different interval. '
         'A difference in window, threshold or tie treatment is a limitation, not by itself a reason '
         'to abstain. You may use clearly stated forecasting assumptions or hypothetical models; '
@@ -181,10 +284,12 @@ def format_explanation(value, features):
     target=features['target']; market=features['evidence'][0]
     threshold=market.get('market_threshold')
     threshold_note='' if threshold is None else f'; threshold={threshold}'
+    market_time = (f"{market['market_start']} to {market['market_end']}" if market['market_start']
+                   else f"fixing at {market['market_end']}")
     return ('Experimental uncalibrated model estimate. '+value.explanation
             +f"\nRequested target: {target['event']}; {target['prediction_time']} to {target['target_time']}; "
              f"source={target['price_source']}; convention={target['reference_price_definition']}; tie={target['tie_definition']}."
-            +f"\nObserved market: {market['market_event']}{threshold_note}; {market['market_start']} to {market['market_end']}; "
+            +f"\nObserved market: {market['market_event']}{threshold_note}; {market_time}; "
              f"source={market['market_price_source']}; convention={market['market_price_convention']}; tie={market['market_tie_rule']}."
             +'\nTarget: '+value.target_analysis
             +'\nContract differences: '+value.contract_differences
@@ -208,7 +313,7 @@ def forecast_from_market_evidence(observation, *, prediction_time, target_time,
         return missing('Evidence validated, but no model was requested; no forecast was generated.')
     try:
         payload=model_call(build_prompt(features))
-        estimate=payload if isinstance(payload,ModelEstimate) else ModelEstimate.model_validate(parse_model_object(payload))
+        estimate=parse_model_estimate(payload)
         allowed={item['evidence_id'] for item in features['evidence']}
         if not set(estimate.evidence_ids).issubset(allowed):
             raise ValueError('Unknown evidence ID')

@@ -74,24 +74,25 @@ def test_conflict_in_any_lookback_session_abstains(sample_series,session):
 
 
 def test_live_snapshot_uses_collection_completion_and_not_publication(tmp_path,monkeypatch,sample_series):
-    from market_data import live, macro
-    import agents.specialists.news_specialist as news
+    from market_data import live, yahoo_dashboard
+    from market_data.prediction_markets import dashboard_collect
     readings=iter((NOW-timedelta(seconds=10),NOW))
     def downloader(symbol,**kwargs):
         return pd.DataFrame({'Close':sample_series['dxy' if symbol=='DX-Y.NYB' else 'treasury_10y']})
     saved=collect('2026-10-19','2026-11-14',output=tmp_path/'download'/'macro.csv',
                   downloader=downloader,now=NOW,clock=lambda:next(readings))
-    def fake_collect(*args,**kwargs):
-        assert kwargs['clock'] is live.now
+    def fake_collect(kind, directory):
+        if kind != 'macro':
+            raise RuntimeError('offline mock')
         return saved.copy()
     def unavailable(*args,**kwargs):
         raise RuntimeError('offline mock')
-    monkeypatch.setattr(macro,'collect',fake_collect)
+    monkeypatch.setattr(yahoo_dashboard,'collect_yahoo',fake_collect)
+    monkeypatch.setattr(dashboard_collect,'collect_betting_observation',lambda: ({}, {'status':'unavailable','reason':'offline mock'}))
     monkeypatch.setattr(live,'now',lambda:NOW)
     monkeypatch.setattr(live,'collect_bitcoin',unavailable)
     monkeypatch.setattr(live,'collect_chain',unavailable)
     monkeypatch.setattr(live,'get_json',unavailable)
-    monkeypatch.setattr(news,'_fetch_recent_btc_news',unavailable)
     monkeypatch.delenv('COINGECKO_DEMO_API_KEY',raising=False)
     data,status=live.collect_snapshot(tmp_path/'snapshot')
     frame=data['macro']

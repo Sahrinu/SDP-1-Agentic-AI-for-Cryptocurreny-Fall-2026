@@ -6,7 +6,7 @@ import os
 import re
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, Sequence
+from typing import Any, Literal, Sequence
 
 from google import genai
 from google.genai import types
@@ -16,6 +16,10 @@ from agents.schemas import NewsSpecialistResult
 from market_data.yahoo import yf_retry
 from market_data.yahoo import _extract_article_data
 from model_clients.factory import create_llm_client
+
+
+class NewsModelOutput(NewsSpecialistResult):
+    agent: Literal["News Specialist"] = "News Specialist"
 
 DEFAULT_PROVISIONAL_FORECAST = (
     "BTC price at target_time is strictly greater than BTC price at prediction_time, using the same price source for both."
@@ -226,6 +230,7 @@ def build_gemini_prompt(articles: Sequence[dict[str, Any]], prediction_time: dat
             "When two pieces describe the same event, count them as one signal. Use the article title, publisher, publication timestamp, URL, summary/text, and source_type only to decide whether the evidence supports the probability_up outcome. "
             "Ignore any article published after prediction_time. Flag unknown publication timestamps in the output limitations. "
             "Return a structured object that matches the schema exactly: agent, prediction_time, target_time, probability_up, explanation, evidence_ids, data_status, limitations. "
+            "Set agent to the exact string 'News Specialist'. "
             "data_status must be either 'sufficient_data' or 'insufficient_data'; do not use any other status string. "
             "limitations must be a JSON list of strings; use [] when there are no limitations. "
             "If there is insufficient usable evidence after filtering, probability_up must be null and data_status must be 'insufficient_data'. "
@@ -311,7 +316,7 @@ def _invoke_native_google_request(model_name: str, prompt_text: str, api_key: st
         contents=prompt_text,
         config=types.GenerateContentConfig(
             response_mime_type="application/json",
-            response_schema=NewsSpecialistResult,
+            response_schema=NewsModelOutput,
         ),
     )
     return _coerce_model_response(response)
@@ -374,7 +379,7 @@ def run_news_specialist(
     structured = None
     if hasattr(model_client, "with_structured_output"):
         try:
-            structured = model_client.with_structured_output(NewsSpecialistResult, method="json_schema")
+            structured = model_client.with_structured_output(NewsModelOutput, method="json_schema")
         except (AttributeError, NotImplementedError, TypeError):
             structured = None
 

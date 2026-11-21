@@ -232,16 +232,36 @@ def test_key_form_has_no_url_submission_fallback(local_http):
     assert b'localStorage' not in script and b'sessionStorage' not in script
 
 
-def test_http_progress_is_visible_before_the_forecast_finishes(local_http,monkeypatch):
+@pytest.mark.parametrize('stale_source', [None, 'prices', 'book'])
+def test_http_progress_is_visible_before_the_forecast_finishes(local_http,monkeypatch,stale_source):
+    from datetime import datetime, timedelta, timezone
     import threading
     import time
+    import pandas as pd
     import dashboard.__main__ as server_module
     import market_data.live as live
     from agents.registry import CATALOG
     entered,release=threading.Event(),threading.Event()
+    captures = []
+    book_refreshes = []
+    now = datetime.now(timezone.utc)
+    def collect(directory, *, input_directory):
+        captures.append(directory)
+        first = len(captures) == 1
+        candle_age = 2 if first and stale_source == 'prices' else 1
+        book_age = 6 if first and stale_source == 'book' else 0
+        prices = pd.DataFrame({'close': [100.]}, index=pd.to_datetime(
+            [now.date() - timedelta(days=candle_age)], utc=True))
+        return {'btc_prices': prices, 'student2_markets_observed_at':
+                (now - timedelta(minutes=book_age)).isoformat()}, {}
+    monkeypatch.setattr(live,'collect_snapshot',collect)
     monkeypatch.setattr(live,'reference_quote',lambda:{'source':'unit-test-only'})
     monkeypatch.setattr(live,'collect_news',lambda:[{'title':'Unit test BTC article'}])
-    monkeypatch.setattr(live,'refresh_betting_inputs',lambda *a,**kw:{'status':'unavailable','reason':'offline test'})
+    monkeypatch.setattr(live,'collect_recent_bitcoin',lambda:{})
+    def refresh_betting(data, directory):
+        book_refreshes.append(data.pop('student2_markets_observed_at', None))
+        return {'status':'unavailable','reason':'offline test'}
+    monkeypatch.setattr(live,'refresh_betting_inputs',refresh_betting)
     def forecast(data,quote,*,client,on_progress,ledger=None):
         for index,spec in enumerate(CATALOG):
             on_progress({'event':'agent_started','role':spec.name})
@@ -256,10 +276,18 @@ def test_http_progress_is_visible_before_the_forecast_finishes(local_http,monkey
         on_progress({'event':'aggregation_completed','methods':methods})
         return {'id':'unit-test-forecast','methods':methods}
     monkeypatch.setattr(server_module,'forecast_snapshot',forecast)
+    if stale_source:
+        assert local_http('POST','/api/collect',headers={'X-Demo-Token':local_http.token})[0]==202
+        deadline=time.monotonic()+5
+        while json.loads(local_http('GET','/api/state')[1])['busy']:
+            assert time.monotonic() < deadline
+            time.sleep(.005)
     code,_,_=local_http('POST','/api/forecast',headers={'X-Demo-Token':local_http.token})
     assert code==202
     try:
         assert entered.wait(timeout=5)
+        assert len(captures) == {None: 0, 'prices': 2, 'book': 1}[stale_source]
+        assert len(book_refreshes) == 1
         _,payload,_=local_http('GET','/api/state')
         state=json.loads(payload)
         assert state['busy'] and state['forecast'] is None

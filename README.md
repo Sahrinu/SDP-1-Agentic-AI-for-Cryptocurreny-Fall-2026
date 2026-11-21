@@ -241,7 +241,17 @@ the breaker is halted, and the gateway never forces a liquidation.
 | Mood | Alternative.me Fear & Greed | Daily readings plus Gemini; not a real-time social stream |
 | Stablecoin | CoinGecko | Local demo key; prospective same-source snapshots approximately 24h apart; no fabricated baseline |
 | ETF | Reviewed `data/etf_flows.csv` import | Complete sourced flows and real availability timestamps; ETF prices are not fund flows |
-| Betting odds | Bounded public Limitless discovery and Socket.IO book capture immediately before forecasting | Validates frame/timestamps and calls the evidence model; abstains if no usable book arrives |
+| Betting odds | Public Kalshi daily BTC threshold trades captured immediately before forecasting | Trade timestamps are validated against a 30-second receipt limit; an explicit model estimates the separate Binance target |
+
+Dashboard collection does not call Gemini. Yahoo News during source collection and Yahoo macro each run in an
+isolated worker with a 45-second wall-clock deadline and at most two target HTTP
+sends per URL, including client fallback; a non-rate-limit 4xx fails immediately.
+Cookie and crumb negotiation is additional but shares the worker deadline. The
+News rate-limit wrapper allows at most one retry. A timed-out or failed source is
+reported unavailable; no substitute evidence is created. The Limitless search
+is bounded and may find no supported active market or fresh streamed book.
+Forecasting is a separate explicit action that can make paid model calls when
+Gemini is configured.
 
 DXY is an index, Yahoo is a provider, and FRED is another provider: they are not
 three equivalent data series. Yahoo dollar/yield proxies suit this prototype's
@@ -763,9 +773,11 @@ The dashboard's `PaperStore` requires an explicit policy, an already initialized
 risk-state path and a BUY fraction. Its default configuration blocks orders and
 reports the missing settings. Dashboard account and risk state use separate
 SQLite transactions: if a process stops between commits, the account mismatch
-blocks subsequent orders and requires inspection. Account restoration and
-identity authentication are not provided; a storage failure also prevents a
-durable halt guarantee. These limitations preclude claiming production readiness.
+blocks subsequent orders and requires inspection. The dashboard reloads saved
+account fields and trade records during normal decisions, but standalone account
+reconstruction and mismatch recovery are not provided. Reset actors are not
+authenticated, and storage failure can prevent a durable halt guarantee. These
+limitations preclude claiming production readiness.
 
 The optional `execution/quality.py` wrapper checks timestamped bid/ask and
 executable ask depth before BUY. Missing or stale liquidity defers BUY without
@@ -864,22 +876,12 @@ pytest temporary directory. The mocked PowerShell collector's three tests passed
 no timeout increase or provider calls were needed. The default system pytest temp
 directory was inaccessible in this environment.
 
-Task 5 reconciliation status (16 November): the offline checks exercise the
+Task 5 reconciliation status (16 November): offline checks exercise the
 caller-attested macro selector, paper exposure cap, breaker restart and audited
-reset, and dashboard decision data. Browser presentation still needs the manual
-check below. Historical macro provider/vintage policy, team breaker thresholds,
-account recovery and cross-database crash reconciliation remain open. Synthetic
-example values are not approved team settings. Student 2 live market forecasting
-remains subject to the source, timestamp and contract limitations above.
-
-Manual dashboard check with controlled offline fixture data: confirm mixed
-forecasts, abstention reasons and failures, including an all-abstain run; compare
-an executed BUY, a cap-blocked BUY, a halted SELL and a HOLD with their supplied
-status, reason, ledger and balances; reload and check the persisted decision.
-Confirm the default configuration reports the breaker as unconfigured. An
-executed order requires an explicitly configured paper policy and state; the
-default dashboard deliberately blocks orders. Browser rendering has not been
-verified in this workspace.
+reset, and dashboard decision data. These checks do not establish historical
+provider availability or complete crash recovery. See the browser evidence and
+remaining completion criteria in [Remaining work](#remaining-work). Synthetic
+breaker settings are not agreed team policy.
 
 Planning window: **14 September–24 November 2026**, assuming submission on
 24 November. The chart is an editable planning baseline, not evidence that tasks
@@ -944,24 +946,16 @@ precedence). Add `GEMINI_API_KEY=...` there, or use the dashboard's masked sessi
 key field. `.env` and `outputs/` are ignored by Git. Restart after editing `.env`.
 Never add the key to a tracked configuration file.
 
-Betting odds now follows public bounded discovery → selected market detail
-validation → timestamped two-sided Socket.IO book → explicit model estimate →
-schema/citation validation → audited specialist result. Collection runs immediately
-before the forecast reference quote and cutoff are chosen. A failed refresh clears
-the previous book. The stream and model estimate stay separate from the market's
-YES payout midpoint; neither REST prices nor a synthetic book replace a failed
-live feed. Full-book updates and increasing versions are required; unsupported
-rules, partial frames, stale quotes, disconnects and quiet streams cause abstention.
-The portable discovery search checks at most five pages and is not exhaustive.
-Raw public capture and failure status are saved in `outputs/dashboard/books/`.
-Native certificate trust is used with verification enabled. The default public
-transport implements the documented Engine.IO v4/Socket.IO text handshake,
-subscription and heartbeat over WebSocket in `public_stream.py`; an injected
-Socket.IO client factory remains supported for older callers. The first book
-snapshot is discarded and a subsequent increasing version is required. Provider
-clocks may lead local receipt by at most 500 milliseconds: that measured skew is
-disclosed in the saved quote/model evidence and both original timestamps remain
-unchanged. Larger future offsets and books older than 30 seconds are rejected.
+The live dashboard collects public Kalshi trades for active daily BTC threshold
+markets immediately before forecasting. A trade must be at most 30 seconds
+old at receipt. Its market, rules and original timestamp are revalidated before
+forecasting. The Kalshi contract settles against a CF Benchmarks index fixing.
+With a verified Binance reference close and 25 completed hourly closes, the
+dashboard estimates the team's separate Binance 24-hour forecast from the
+trade price and realized volatility. This estimate uses a normal log-return
+model and does not require Gemini. Raw trades and capture status are saved in
+`outputs/dashboard/books/`. The existing Limitless tools remain available for
+reading and validating saved Limitless observations.
 
 Run the repeated two-specialist experiment from the project root:
 
@@ -1014,9 +1008,8 @@ legacy aliases and packaged resources were checked outside the checkout.
 
 ## Remaining work
 
-- Verify sustained live Betting odds availability on the demo network. The
-  dashboard now captures a fresh public book and validates Gemini JSON output;
-  missing/invalid streams abstain rather than borrowing REST quote timestamps.
+- Measure sustained availability of qualifying Kalshi BTC trades and check
+  the Betting Odds model output on the demo network.
 - Live learning is implemented (`exchange/ledger.py`), but it needs several days
   of real forecasts before any agent's coins differ meaningfully. Until then, use
   settled replay outcomes to demonstrate learning. With a 20% influence cap, at
@@ -1036,6 +1029,21 @@ legacy aliases and packaged resources were checked outside the checkout.
   Hidden-prompt, whale and memory-poisoning studies remain experimental work;
   no memory-poisoning result should be claimed without a memory subsystem.
 - Finalize the report, individual contribution evidence and presentation.
+
+### Offline dashboard walkthrough
+
+The browser observations below are limited to what was reported in the manual
+walkthrough. Offline fixtures are synthetic: the displayed forecast and paper
+examples are independent, and reloading a fixture repeats its in-memory state.
+They are not historical data or proof of live dashboard persistence.
+
+- [x] In the mixed offline fixture, the user observed “No recorded decision yet”
+  and “Circuit breaker: Not configured.” This does not verify the default live
+  dashboard configuration.
+- [x] In the executed offline fixture, the user observed “BUY executed” alongside
+  “Agent influence cap: New BUY blocked.” The former was an independent paper
+  example and the latter described the mixed forecast. Labels were subsequently
+  clarified, but the updated rendering has not been confirmed in the browser.
   Recruiter remains optional for SDP 1.
 
 ## Attribution

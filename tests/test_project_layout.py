@@ -68,7 +68,7 @@ def test_one_documentation_guide_and_local_navigation():
     for folder in ("docs", "compat", "verification", "agents", "market_data", "execution", "examples"):
         docs.extend((root / folder).rglob("*.md"))
     assert docs == [root / "README.md"]
-    guide = (root / "README.md").read_text()
+    guide = (root / "README.md").read_text(encoding="utf-8")
     assert "## Folder and component map" in guide
     assert "## All 13 specialists" in guide
     assert "## Schedule and responsibilities" in guide

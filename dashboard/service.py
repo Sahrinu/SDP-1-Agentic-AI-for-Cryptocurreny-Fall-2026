@@ -87,7 +87,7 @@ def forecast_snapshot(data, quote, *, client=None, decision_time=None, on_progre
     if isinstance(quote['price'], bool) or not math.isfinite(float(quote['price'])) or float(quote['price']) <= 0:
         raise ValueError('Invalid reference price')
     day = instant.date().isoformat()
-    view = dict(data, _decision_time=instant.isoformat())
+    view = dict(data, _decision_time=instant.isoformat(), _reference_close=float(quote['price']))
     contract = {'prediction_time':instant.isoformat(),'target_time':(instant+timedelta(hours=24)).isoformat(),
         'price_source':'binance:BTC/USDT',
         'reference_price_definition':'last completed UTC one-minute close at or before each contract timestamp',

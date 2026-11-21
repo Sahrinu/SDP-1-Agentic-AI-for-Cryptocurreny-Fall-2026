@@ -11,6 +11,7 @@ import threading
 import time
 import uuid
 from datetime import datetime, timezone, timedelta
+from functools import partial
 from pathlib import Path
 from urllib.error import HTTPError
 
@@ -123,6 +124,10 @@ class BookTracker:
         return read_book_event(event, self.market, received_at)
 
 
+class InitialBookOnlyError(TimeoutError):
+    """The stream sent its initial snapshot without a verified update."""
+
+
 def capture_book(market, *, timeout_seconds=20, client_factory=None):
     """One public connection, no retry/reconnect, at most timeout per connect/wait.
 
@@ -134,9 +139,15 @@ def capture_book(market, *, timeout_seconds=20, client_factory=None):
             or not 1 <= timeout_seconds <= 30):
         raise ValueError('Stream timeout must be between 1 and 30 seconds')
     if client_factory is None:
+        from websocket import WebSocketTimeoutException
         from market_data.prediction_markets.public_stream import capture_public_book
-        return capture_public_book(market, BookTracker(market, datetime.now(timezone.utc)),
-                                   timeout_seconds=timeout_seconds)
+        tracker = BookTracker(market, datetime.now(timezone.utc))
+        try:
+            return capture_public_book(market, tracker, timeout_seconds=timeout_seconds)
+        except (TimeoutError, WebSocketTimeoutException) as exc:
+            if tracker.version == 0:
+                raise InitialBookOnlyError('Limitless only sent its initial order-book snapshot') from exc
+            raise
     client = client_factory(reconnection=False, request_timeout=timeout_seconds,
                             logger=False, engineio_logger=False, timestamp_requests=False)
     finished = threading.Event()
@@ -294,8 +305,10 @@ def observe_market(*, slug=None, contract=None, fetch_page=_fetch_page, capture=
             if listing_file is not None:
                 raise ValueError('Targeted market and complete listing are mutually exclusive')
             from market_data.prediction_markets.limitless_targeted_discovery import validate_selected
-            validate_selected(targeted_market, datetime.now(timezone.utc))
-            markets = [targeted_market]
+            market = targeted_market
+            start, end, tie = validate_selected(market, datetime.now(timezone.utc))
+            if slug is not None and market['slug'] != slug:
+                raise ValueError('Selected market differs from requested slug')
             report['listing_source'] = 'bounded_targeted_discovery'
             report['limitations'].append(
                 'The bounded market search is not exhaustive; discovery time does not establish quote freshness.')
@@ -310,12 +323,18 @@ def observe_market(*, slug=None, contract=None, fetch_page=_fetch_page, capture=
                 'Saved listing provenance and retrieval timestamps are not independently authenticated; '
                 'they do not establish quote freshness.')
         report['stage'] = 'market_selection'
-        market, start, end, tie = choose_daily(markets, datetime.now(timezone.utc), slug)
+        if targeted_market is None:
+            market, start, end, tie = choose_daily(markets, datetime.now(timezone.utc), slug)
+        chainlink = tie == 'up'
         report.update(market=market, market_start=start.isoformat(), market_end=end.isoformat(),
-                      market_tie_rule=tie, price_source=SUPPORTED_SOURCE,
-                      reference_price_definition=SUPPORTED_REFERENCE)
+                      market_tie_rule=tie, price_source='chainlink:BTC/USD' if chainlink else SUPPORTED_SOURCE,
+                      reference_price_definition='60s_twap' if chainlink else SUPPORTED_REFERENCE)
         report['stage'] = 'book_stream'
-        quote, event = capture(market)
+        started = time.monotonic()
+        try:
+            quote, event = capture(market)
+        finally:
+            report['book_wait_seconds'] = round(time.monotonic() - started, 1)
         # Do not accept a quote after the market ended during network operations.
         if _datetime(quote['received_at']) >= end:
             raise ValueError('Market ended during collection')
@@ -342,7 +361,7 @@ def observe_market(*, slug=None, contract=None, fetch_page=_fetch_page, capture=
     return report
 
 
-def observe_current_market():
+def observe_current_market(*, timeout_seconds=20):
     """Portable bounded discovery followed by a new public stream capture.
 
     A changing catalogue total need not invalidate a selected candidate: its
@@ -361,7 +380,8 @@ def observe_current_market():
         return {'mode': 'live_read_only_observation', 'observation_status': 'failed',
                 'stage': 'bounded_market_discovery', 'error_type': type(exc).__name__,
                 'finished_at_utc': datetime.now(timezone.utc).isoformat()}
-    result = observe_market(targeted_market=market)
+    result = observe_market(targeted_market=market,
+                            capture=partial(capture_book, timeout_seconds=timeout_seconds))
     result['discovery'] = discovery
     return result
 
