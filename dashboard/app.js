@@ -123,7 +123,9 @@ function renderSources(){
         news:[['News'],'Bitcoin news','Yahoo · timestamped articles'],
         mood:[['Mood'],'Market sentiment','Alternative.me · Fear & Greed'],
         borrowing:[['Borrowing'],'Funding & open interest','Binance USD-M · completed settlements'],
-        stablecoin:[['Stablecoin'],'Stablecoin liquidity','CoinGecko key & comparable 24h snapshots required'],
+        stablecoin:[['Stablecoin'],'Stablecoin live quotes','CoinGecko · 15-minute snapshots'],
+        stablecoin_history:[['Stablecoin'],'Stablecoin peg history','CoinGecko · 365 daily prices & volume (peg-stress model)'],
+        stablecoin_long_history:[['Stablecoin'],'Stablecoin supply history','DefiLlama + Coinbase · daily since 2019 (liquidity model)'],
         etf_flows:[['ETF'],'ETF fund flows','Reviewed data/etf_flows.csv required'],
         betting_odds:[['Betting odds'],'Prediction markets','Recent timestamped Kalshi BTC trade required'],
     };

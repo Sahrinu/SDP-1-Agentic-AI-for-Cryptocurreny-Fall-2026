@@ -1,0 +1,163 @@
+{
+  "version": 3,
+  "components": {
+    "abnormal_issuance": 1,
+    "mint_after_dip": 1,
+    "usdt_premium_ma3": 1,
+    "dominance_z30": -1
+  },
+  "zwindow": 90,
+  "regression_window": 90,
+  "source": "DefiLlama supply + Coinbase BTC-USD",
+  "fits": {
+    "1": {
+      "a": 0.030713350586878206,
+      "b": 0.011524686294414565,
+      "rows": 2425,
+      "train_ic": -0.0014304293544598727
+    },
+    "7": {
+      "a": 0.1085927553110045,
+      "b": 0.2797974155011575,
+      "rows": 2419,
+      "train_ic": 0.07311212231713723
+    }
+  },
+  "train_start": "2019-11-19",
+  "train_end": "2026-11-21",
+  "trained_at": "2026-11-21T20:16:24.813025+00:00",
+  "walk_forward": {
+    "h1": [
+      {
+        "year": 2022,
+        "rows": 365,
+        "btc_up_rate": 0.4602739726027397,
+        "ic": -0.10459863366057771,
+        "brier": 0.2562827432911841,
+        "brier_coinflip": 0.25,
+        "hit_rate": 0.4602739726027397,
+        "hit_always_majority": 0.5397260273972603,
+        "hit_momentum": 0.4849315068493151
+      },
+      {
+        "year": 2023,
+        "rows": 365,
+        "btc_up_rate": 0.4958904109589041,
+        "ic": -0.026470916122202676,
+        "brier": 0.250006022420578,
+        "brier_coinflip": 0.25,
+        "hit_rate": 0.4958904109589041,
+        "hit_always_majority": 0.5041095890410958,
+        "hit_momentum": 0.4602739726027397
+      },
+      {
+        "year": 2024,
+        "rows": 366,
+        "btc_up_rate": 0.5245901639344263,
+        "ic": 0.07870992673065932,
+        "brier": 0.2516345844725238,
+        "brier_coinflip": 0.25,
+        "hit_rate": 0.4562841530054645,
+        "hit_always_majority": 0.5245901639344263,
+        "hit_momentum": 0.45901639344262296
+      },
+      {
+        "year": 2025,
+        "rows": 365,
+        "btc_up_rate": 0.5041095890410959,
+        "ic": -0.007384813535074224,
+        "brier": 0.25000144767012455,
+        "brier_coinflip": 0.25,
+        "hit_rate": 0.5068493150684932,
+        "hit_always_majority": 0.5041095890410959,
+        "hit_momentum": 0.4931506849315068
+      },
+      {
+        "year": 2026,
+        "rows": 324,
+        "btc_up_rate": 0.48148148148148145,
+        "ic": 0.05560871157662572,
+        "brier": 0.25142507393338365,
+        "brier_coinflip": 0.25,
+        "hit_rate": 0.45987654320987653,
+        "hit_always_majority": 0.5185185185185186,
+        "hit_momentum": 0.5
+      }
+    ],
+    "h7": [
+      {
+        "year": 2022,
+        "rows": 365,
+        "btc_up_rate": 0.4301369863013699,
+        "ic": 0.023896224596438958,
+        "brier": 0.26789784434851827,
+        "brier_coinflip": 0.25,
+        "hit_rate": 0.44931506849315067,
+        "hit_always_majority": 0.5698630136986301,
+        "hit_momentum": 0.4602739726027397
+      },
+      {
+        "year": 2023,
+        "rows": 365,
+        "btc_up_rate": 0.5698630136986301,
+        "ic": 0.06291797157479971,
+        "brier": 0.24612488560478402,
+        "brier_coinflip": 0.25,
+        "hit_rate": 0.5342465753424658,
+        "hit_always_majority": 0.5698630136986301,
+        "hit_momentum": 0.4849315068493151
+      },
+      {
+        "year": 2024,
+        "rows": 366,
+        "btc_up_rate": 0.5628415300546448,
+        "ic": 0.04931836762387125,
+        "brier": 0.24722909202460977,
+        "brier_coinflip": 0.25,
+        "hit_rate": 0.5081967213114754,
+        "hit_always_majority": 0.5628415300546448,
+        "hit_momentum": 0.47540983606557374
+      },
+      {
+        "year": 2025,
+        "rows": 365,
+        "btc_up_rate": 0.5178082191780822,
+        "ic": 0.04142144260854973,
+        "brier": 0.250022120100116,
+        "brier_coinflip": 0.25,
+        "hit_rate": 0.5260273972602739,
+        "hit_always_majority": 0.5178082191780822,
+        "hit_momentum": 0.4657534246575342
+      },
+      {
+        "year": 2026,
+        "rows": 318,
+        "btc_up_rate": 0.44025157232704404,
+        "ic": 0.19370197285293633,
+        "brier": 0.24650279332108344,
+        "brier_coinflip": 0.25,
+        "hit_rate": 0.5974842767295597,
+        "hit_always_majority": 0.559748427672956,
+        "hit_momentum": 0.5345911949685535
+      }
+    ]
+  },
+  "summary": {
+    "h1": {
+      "years": 5,
+      "pooled_brier": 0.25188006148781433,
+      "brier_coinflip": 0.25,
+      "mean_ic": -0.0008271450021139174,
+      "years_ic_positive": 2,
+      "years_beating_coinflip": 0
+    },
+    "h7": {
+      "years": 5,
+      "pooled_brier": 0.2516864003522256,
+      "brier_coinflip": 0.25,
+      "mean_ic": 0.0742511958513192,
+      "years_ic_positive": 5,
+      "years_beating_coinflip": 3
+    }
+  }
+}

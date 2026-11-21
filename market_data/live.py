@@ -308,6 +308,50 @@ def collect_snapshot(directory, *, input_directory=None):
             selected[path.name[:8]] = path
         export_history(selected.values(),target)
         return pd.read_csv(target,index_col='date')
+    def model_stale(path, version=None):
+        if not path.is_file() or (now() - datetime.fromtimestamp(path.stat().st_mtime, timezone.utc)).days >= 7:
+            return True
+        return version is not None and json.loads(path.read_text(encoding='utf-8')).get('version') != version
+    project_root = Path(input_directory).resolve().parent if input_directory is not None else None
+    def stablecoin_history():
+        # CoinGecko daily history (365 days, has volume): peg-stress model.
+        # Refreshed once per UTC day; model retrained when older than 7 days.
+        from market_data.stablecoin import depeg_model as dm
+        key = coingecko_key(project_root)
+        if not key or project_root is None:
+            raise ValueError('CoinGecko key or project unavailable')
+        path, model_path = project_root/'data/stablecoin_history.csv', project_root/'data/stablecoin_depeg_model.json'
+        frame = dm.load_history(path) if path.is_file() else None
+        if frame is None or frame.index[-1].date() < now().date():
+            frame = dm.fetch_history(key, get=lambda url, headers=None: get_json(url, headers=headers or {}))
+            dm.save_history(frame, path)
+        if model_stale(model_path):
+            model_path.write_text(json.dumps(dm.train(frame), indent=2)+'\n', encoding='utf-8')
+        return frame
+    value = attempt('stablecoin_history', stablecoin_history)
+    if value is not None:
+        data['stablecoin_history'] = value
+    def stablecoin_long_history():
+        # DefiLlama supply + Coinbase BTC-USD since 2019 (free, no key): liquidity model.
+        # Refetched when the saved copy is over 12 hours old; model retrained weekly.
+        from market_data.stablecoin import defillama, liquidity_model as lm
+        from market_data.stablecoin.depeg_model import load_history
+        if project_root is None:
+            raise ValueError('Project directory unavailable')
+        path = project_root/'data/stablecoin_history_long.csv'
+        model_path = project_root/'data/stablecoin_liquidity_model.json'
+        fresh = path.is_file() and (now() - datetime.fromtimestamp(path.stat().st_mtime, timezone.utc)) < timedelta(hours=12)
+        if fresh:
+            frame = load_history(path)
+        else:
+            frame = defillama.fetch_history(get=lambda url, headers=None: get_json(url, timeout=30, headers=headers or {}))
+            frame.to_csv(path)
+        if model_stale(model_path, version=3):
+            model_path.write_text(json.dumps(lm.train(frame), indent=2)+'\n', encoding='utf-8')
+        return frame
+    value = attempt('stablecoin_long_history', stablecoin_long_history)
+    if value is not None:
+        data['stablecoin_history_long'] = value
     archive_info = {}
     value = attempt('stablecoin', stablecoin)
     statuses['stablecoin'].update(archive_info)
