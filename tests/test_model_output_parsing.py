@@ -75,3 +75,47 @@ def test_native_gemini_structured_schema_usage_and_raw_recording(monkeypatch):
     assert model.responses[0]['response_id']=='test-response-id'
     assert 'unit-test-value-not-a-real-key' not in json.dumps(model.responses+model.usage)
     model.close();assert saved['closed']
+
+
+def test_gemini_server_error_uses_one_recorded_fallback(monkeypatch):
+    from google import genai
+    from google.genai.errors import ServerError
+    from model_clients.demo_gemini import DemoGemini
+
+    called=[]
+    class Client:
+        def __init__(self,**kwargs):self.models=self
+        def generate_content(self,*,model,contents,config):
+            called.append(model)
+            if model == 'gemini-3.8-flash':
+                raise ServerError(503,{'error':{'message':'Unit-test unavailable'}})
+            return SimpleNamespace(text='{"answer":true}',usage_metadata=None)
+        def close(self):pass
+    monkeypatch.setattr(genai,'Client',Client)
+    client=DemoGemini(api_key='unit-test-value-not-a-real-key',model='gemini-3.8-flash')
+    assert json.loads(client('Unit test prompt')) == {'answer':True}
+    assert called == ['gemini-3.8-flash','gemini-3.5-flash-lite']
+    assert client.usage[0]['error_type'] == 'ServerError'
+    assert client.usage[0]['error_code'] == 503
+    assert client.usage[1]['model'] == 'gemini-3.5-flash-lite'
+    assert client.responses[0]['model'] == 'gemini-3.5-flash-lite'
+
+
+def test_gemini_client_error_records_code_without_fallback(monkeypatch):
+    from google import genai
+    from google.genai.errors import ClientError
+    from model_clients.demo_gemini import DemoGemini
+
+    called=[]
+    class Client:
+        def __init__(self,**kwargs):self.models=self
+        def generate_content(self,*,model,contents,config):
+            called.append(model)
+            raise ClientError(404,{'error':{'message':'Unit-test model unavailable'}})
+        def close(self):pass
+    monkeypatch.setattr(genai,'Client',Client)
+    client=DemoGemini(api_key='unit-test-value-not-a-real-key',model='gemini-3.8-flash')
+    with pytest.raises(ClientError):
+        client('Unit test prompt')
+    assert called == ['gemini-3.8-flash']
+    assert client.usage[0]['error_code'] == 404

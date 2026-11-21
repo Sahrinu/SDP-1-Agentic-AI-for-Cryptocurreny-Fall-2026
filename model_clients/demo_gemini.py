@@ -18,30 +18,45 @@ class DemoGemini:
         self.responses = []  # Local experiment recorder; never included in dashboard usage.
 
     def _generate(self, prompt, schema=None):
-        start = time.monotonic()
+        from google.genai.errors import APIError, ServerError
+
         config = {'temperature': 0, 'response_mime_type': 'application/json'}
         if schema is not None:
             config['response_schema'] = schema
-        record = {'model': self.model}
-        try:
-            result = self.client.models.generate_content(model=self.model, contents=prompt, config=config)
-            meta = getattr(result, 'usage_metadata', None)
-            record.update(input_tokens=getattr(meta, 'prompt_token_count', None),
-                          output_tokens=getattr(meta, 'candidates_token_count', None))
-            saved = {'model': self.model, 'prompt': prompt, 'response_text': result.text,
-                     'model_version': getattr(result, 'model_version', self.model),
-                     'response_id': getattr(result, 'response_id', None)}
-            self.responses.append(saved)
-            # Keep invalid responses in the local recorder too, then fail closed.
-            value = parse_model_object(result)
-            saved['parsed'] = value
-            return value, result.text
-        except Exception as exc:
-            record['error_type'] = type(exc).__name__
-            raise
-        finally:
-            record['seconds'] = round(time.monotonic() - start, 3)
-            self.usage.append(record)
+        models = [self.model]
+        if self.model == 'gemini-3.8-flash':
+            models.append('gemini-3.5-flash-lite')
+        for index, model in enumerate(models):
+            start = time.monotonic()
+            record = {'model': model}
+            try:
+                result = self.client.models.generate_content(model=model, contents=prompt, config=config)
+                meta = getattr(result, 'usage_metadata', None)
+                record.update(input_tokens=getattr(meta, 'prompt_token_count', None),
+                              output_tokens=getattr(meta, 'candidates_token_count', None))
+                saved = {'model': model, 'prompt': prompt, 'response_text': result.text,
+                         'model_version': getattr(result, 'model_version', model),
+                         'response_id': getattr(result, 'response_id', None)}
+                self.responses.append(saved)
+                # Keep invalid responses in the local recorder too, then fail closed.
+                value = parse_model_object(result)
+                saved['parsed'] = value
+                return value, result.text
+            except ServerError as exc:
+                record['error_type'] = type(exc).__name__
+                record['error_code'] = exc.code
+                if index == len(models) - 1:
+                    raise
+            except APIError as exc:
+                record['error_type'] = type(exc).__name__
+                record['error_code'] = exc.code
+                raise
+            except Exception as exc:
+                record['error_type'] = type(exc).__name__
+                raise
+            finally:
+                record['seconds'] = round(time.monotonic() - start, 3)
+                self.usage.append(record)
 
     def __call__(self, prompt):
         return self._generate(prompt)[1]

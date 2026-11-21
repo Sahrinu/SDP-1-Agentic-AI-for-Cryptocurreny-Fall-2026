@@ -156,7 +156,10 @@ def create_server(port=8765, *, root=ROOT, bind=True):
                 from experiments.debate import debate
                 from model_clients.demo_gemini import DemoGemini
                 client = DemoGemini(api_key=credentials.resolved_key())
-                result = debate(state['forecast'], client)
+                try:
+                    result = debate(state['forecast'], client)
+                finally:
+                    client.close()
                 result['usage'] = client.usage
                 with lock:
                     state.update(debate=result,message='Debate baseline completed on the same saved evidence. It does not alter the Exchange vote.')
