@@ -1,13 +1,37 @@
 'use strict';
 const $=id=>document.getElementById(id);
 const token=document.querySelector('meta[name="demo-token"]').content;
-const roles=[['Chart','CH','Technical trends','blue'],['Borrowing','BR','Funding & open interest','amber'],['Network','NW','On-chain activity','green'],['Miner','MN','Hash rate & fees','amber'],['Stablecoin','SC','Liquidity & peg stability','green'],['ETF','ET','Institutional flows','purple'],['News','NE','News & events','blue'],['Mood','MO','Market sentiment','purple'],['World economy','WE','Dollar & Treasury yields','blue'],['Betting odds','BO','Prediction-market evidence','purple'],['Crash','CR','Tail risk & drawdown','amber'],['Long-term','LT','Long-horizon structure','green'],['Contrarian','CO','Consensus reversal','purple']];
+const roles=[
+    ['Chart','chart','Technical trends','agent-chart'],
+    ['Borrowing','borrowing','Funding & open interest','agent-borrowing'],
+    ['Network','network','On-chain activity','agent-network'],
+    ['Miner','miner','Hash rate & fees','agent-miner'],
+    ['Stablecoin','stablecoin','Liquidity & peg stability','agent-stablecoin'],
+    ['ETF','etf','Institutional flows','agent-etf'],
+    ['News','news','News & events','agent-news'],
+    ['Mood','mood','Market sentiment','agent-mood'],
+    ['World economy','world-economy','Dollar & Treasury yields','agent-world-economy'],
+    ['Betting odds','betting','Prediction-market evidence','agent-betting'],
+    ['Crash','crash','Tail risk & drawdown','agent-crash'],
+    ['Long-term','long-term','Long-horizon structure','agent-long-term'],
+    ['Contrarian','contrarian','Consensus reversal','agent-contrarian'],
+];
 let state=null,market={candles:[]},signature='',marketVersion=null,marketFetching=false,filter='all',search='',range=90,chartStyle='candles',showEma=true,hover=null,plot=null,replayVersion=null;
 const percent=v=>typeof v==='number'&&Number.isFinite(v)?(v*100).toFixed(1)+'%':'—';
 const num=(v,places=2)=>typeof v==='number'&&Number.isFinite(v)?v.toLocaleString('en-US',{minimumFractionDigits:places,maximumFractionDigits:places}):'—';
 const money=v=>v!==null&&v!==undefined&&Number.isFinite(Number(v))?'$'+num(Number(v)):'—';
 const utc=v=>{if(!v)return '—';const d=new Date(v);return Number.isNaN(d.valueOf())?'—':d.toLocaleString('en-GB',{timeZone:'UTC',day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit',hour12:false})+' UTC'};
 function node(tag,text,cls){const n=document.createElement(tag);if(text!==undefined)n.textContent=text;if(cls)n.className=cls;return n}
+function agentIcon(role){
+    const spec=roles.find(r=>r[0]===role);
+    if(!spec)return null;
+    const icon=node('span',undefined,'agent-icon '+spec[3]);
+    const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');
+    const use=document.createElementNS('http://www.w3.org/2000/svg','use');
+    svg.setAttribute('viewBox','0 0 24 24');svg.setAttribute('aria-hidden','true');
+    use.setAttribute('href','#i-agent-'+spec[1]);svg.append(use);icon.append(svg);
+    return icon;
+}
 function setText(id,text){$(id).textContent=text}
 function toast(text){setText('toast',text);$('toast').hidden=false;clearTimeout(toast.timer);toast.timer=setTimeout(()=>$('toast').hidden=true,5500)}
 async function post(path,body){const r=await fetch('/api/'+path,{method:'POST',headers:{'X-Demo-Token':token,...(body?{'Content-Type':'application/json'}:{})},body:body?JSON.stringify(body):undefined});let result;try{result=await r.json()}catch{throw new Error('The local service could not complete this request.')}if(!r.ok)throw new Error(result.error||'Request failed');return result}
@@ -40,8 +64,8 @@ function renderActivity(activity){
     const grid=$('activity-agents');grid.replaceChildren();
     const labels={queued:'Queued',running:'Evaluating',forecasted:'Forecast returned',abstained:'Abstained',failed:'Failed',not_run:'Not reached'};
     roles.forEach(([role,glyph,,color])=>{
-        const record=a.agents.find(x=>x.role===role)??{role,status:'queued'},card=node('div',undefined,'activity-agent '+record.status);
-        const top=node('div',undefined,'activity-agent-top');top.append(node('span',glyph,'agent-glyph '+color),node('strong',role));
+        const record=a.agents.find(x=>x.role===role)??{role,status:'queued'},card=node('div',undefined,'activity-agent '+color+' '+record.status);
+        const top=node('div',undefined,'activity-agent-top');top.append(agentIcon(role),node('strong',role));
         const stamp=node('span',labels[record.status]??record.status,'activity-agent-status');
         const value=node('div',undefined,'activity-agent-value');
         value.append(node('span',typeof record.p_up==='number'?percent(record.p_up)+' P(up)':record.status==='running'?'Evaluating evidence…':record.status==='abstained'?'No usable forecast':'—'),
@@ -67,7 +91,10 @@ function renderActivity(activity){
     if(!events.length)list.append(node('li','Execution events will appear here.','activity-empty'));
     for(const event of events){
         const item=node('li',undefined,event.kind),time=node('time','+'+duration(event.elapsed_ms)),body=node('div');
-        body.append(node('strong',event.role??(event.kind.startsWith('aggregation')?'Agent Exchange':'Forecast run')),node('span',event.message));
+        const name=node('strong',undefined,'activity-event-name'),icon=agentIcon(event.role);
+        if(icon)name.append(icon);
+        name.append(node('span',event.role??(event.kind.startsWith('aggregation')?'Agent Exchange':'Forecast run')));
+        body.append(name,node('span',event.message));
         if(event.duration_ms!==undefined)body.append(node('small',labels[event.status]+' · '+duration(event.duration_ms)+(typeof event.p_up==='number'?' · '+percent(event.p_up)+' P(up)':'')));
         item.append(time,body);list.append(item);
     }
@@ -83,9 +110,36 @@ function renderActivity(activity){
 function render(s){renderActivity(s.activity);renderLiveCoins(s);setText('status-text',s.message);$('status').classList.toggle('busy',s.busy);setText('notice-end',s.busy?'WORKING':'PAPER MODE');document.querySelectorAll('[data-action]').forEach(b=>{const a=b.dataset.action;b.disabled=s.busy||(['paper','debate'].includes(a)&&!s.forecast)||(a==='debate'&&!s.gemini_configured)||(a==='real-replay'&&!s.sources?.btc_prices)});document.querySelectorAll('[data-open-key]').forEach(b=>b.disabled=s.busy);const f=s.forecast,p=f?.methods?.exchange??null,count=f?.active_count??s.activity?.forecasted_count??0;setText('prob',percent(p));setText('summary-prob',percent(p));setText('strip-coverage',count+' / 13');setText('active-count',count);$('count').replaceChildren(document.createTextNode(String(count)+' '),node('small','/ 13'));setText('filter-active-count',count);setText('filter-missing-count',f?13-count:(s.activity?.abstained_count??0)+(s.activity?.failed_count??0));setText('agent-summary',s.activity?.status==='running'?(s.activity.evaluated_count+' / 13 EVALUATED'):f||s.activity?.status==='failed'?count+' ACTIVE · '+(s.activity?.abstained_count??0)+' ABSTAINED · '+(s.activity?.failed_count??0)+' FAILED':'13 QUEUED');$('coverage-fill').style.width=(count/13*100)+'%';const dots=$('coverage-dots');dots.replaceChildren(...roles.map((_,i)=>node('i',undefined,i<count?'on':'')));$('gauge-arc').setAttribute('stroke-dasharray',p===null?'0 100':(p*100)+' 100');const bias=p===null?(f?'No usable forecast':'Awaiting forecast'):p>.5?'Upward bias':p<.5?'Downward bias':'Neutral outlook';setText('bias',bias);$('bias').className='signal-pill'+(p===null?'':p>.5?' up':p<.5?' down':'');setText('summary-signal',p===null?(f?'No validated forecasts available':'Run a forecast to reveal the signal'):bias+' · experimental probability');setText('coverage-note',!f?'Evidence determines participation':f.cap_feasible?'20% influence cap is feasible':'Displayed forecast: fewer than 5 active · BUY blocked');for(const method of ['exchange','average','vote'])setText('method-'+method,percent(f?.methods?.[method]));const window=$('forecast-window').querySelector('span');window.textContent=f?'Target: '+utc(f.contract.target_time)+' · strict higher price':'Outcome available 24 hours after forecast.';setText('cap-state',f?(f.cap_feasible?'Feasible for displayed forecast':'Infeasible: forecast BUY blocked'):'Requires ≥ 5 active');const configured=s.gemini_configured;setText('key-label',configured?'Gemini configured':'Connect Gemini');setText('model-state',configured?(s.gemini?.source==='session'?'Session key configured':'Environment key configured'):'Session key not configured');renderKeyStatus();renderAgents();renderSources();renderMarket();renderPaper();setText('contract',f?JSON.stringify({contract:f.contract,reference:f.quote,methods:f.methods,weights:f.weights,coins:f.coins,coins_basis:f.coins_basis,live_learning:s.learning,limitations:f.limitations,usage:f.usage,debate:s.debate},null,2):'Generate a forecast to inspect its event definition.');if(s.replay&&replayVersion!==s.replay.output){replayVersion=s.replay.output;renderReplay()}drawReplay()}
 function renderMarket(){const bars=market.candles||[],last=bars.at(-1),prior=bars.at(-2),f=state?.forecast;const price=f?.quote?.price??last?.close??null;$('btc-price').replaceChildren(document.createTextNode(price===null?'—':num(price)),node('small','USDT'));let change=null,basis='Waiting for market data';if(f&&last){change=(f.quote.price/last.close-1)*100;basis='since last daily close'}else if(last&&prior){change=(last.close/prior.close-1)*100;basis='last completed UTC day'}setText('price-change',change===null?basis:(change>=0?'↗ +':'↘ ')+num(change)+'% '+basis);$('price-change').className=change===null?'':change>=0?'positive':'negative';setText('price-basis',f?'Reference '+utc(f.quote.bar_close_time):last?'Closed '+last.date:'No observation yet');setText('daily-high',last?.high!==undefined?num(last.high):'—');setText('daily-low',last?.low!==undefined?'Low '+num(last.low):'Low —');setText('daily-volume',last?.volume!==undefined?num(last.volume,0)+' BTC':'—');$('chart-empty').hidden=bars.length>0;setText('chart-date',last?'Last candle · '+last.date+' UTC':'No candle history loaded');readout(last);$('candles-button').disabled=bars.length>0&&!bars.every(b=>b.high!==undefined&&b.low!==undefined);}
 function readout(bar){const r=$('chart-readout');if(!bar){r.replaceChildren(document.createTextNode('Completed UTC daily candles '),node('span','· Refresh market data to begin'));return}r.replaceChildren(node('span',bar.date+'  '),document.createTextNode('O '+num(bar.open)+'  '+(bar.high!==undefined?'H '+num(bar.high)+'  L '+num(bar.low)+'  ':'')+'C '+num(bar.close)),node('span','  · 1D / UTC'))}
-function renderAgents(){const f=state?.forecast,body=$('agent-rows');body.replaceChildren();let shown=0;roles.forEach(([role,glyph,perspective,color],i)=>{const progress=state?.activity?.agents?.find(a=>a.role===role),a=f?.agents.find(a=>a.role===role)??progress?.result,active=!!a&&a.p_up!==null&&a.p_up!==undefined;const queued=!a&&(!progress||['queued','not_run'].includes(progress.status)),running=progress?.status==='running';if(filter==='active'&&!active||filter==='missing'&&(active||running||queued)||search&&!((role+' '+perspective).toLowerCase().includes(search)))return;shown++;const row=node('tr');row.append(node('td',String(i+1).padStart(2,'0')));const name=node('td'),wrap=node('div',undefined,'agent-name');wrap.append(node('span',glyph,'agent-glyph '+color),node('span',role));name.append(wrap);row.append(name,node('td',perspective,'agent-perspective'));const direction=!active?'—':a.p_up>.5?'Bullish':a.p_up<.5?'Bearish':'Neutral',signal=node('td');signal.append(node('span',direction,'signal '+(!active?'missing':a.p_up>.5?'up':a.p_up<.5?'down':'neutral')));row.append(signal);const prob=node('td'),group=node('div',undefined,'prob-cell'),bar=node('span',undefined,'prob-bar'),fill=node('i');fill.style.width=active?a.p_up*100+'%':'0%';bar.append(fill);group.append(node('strong',percent(a?.p_up)),bar);prob.append(group);row.append(prob,node('td',active?percent(f?.weights?.[a.agent]):'—'));const status=node('td'),label=node('span',undefined,'status-cell'+(active?' active':''));label.append(node('i'),document.createTextNode(running?'Evaluating':progress?.status==='not_run'?'Not reached':queued?'Queued':active?'Active':progress?.status==='failed'?'Failed':'Abstaining'));status.append(label);row.append(status);const evidence=node('td'),button=node('button',a?'View report ↗':'Requirements ↗','report-button');button.addEventListener('click',()=>openEvidence(role,perspective,a));evidence.append(button);row.append(evidence);body.append(row)});if(!shown){const row=node('tr'),cell=node('td','No specialists match this filter.','empty-inline');cell.colSpan=8;row.append(cell);body.append(row)}setText('table-caption',f?shown+' specialists shown · forecast '+utc(f.created_at):state?.activity?.status==='running'?shown+' specialists shown · results arrive as each returns':shown+' registered specialists · no forecast yet')}
-function openEvidence(role,perspective,a){setText('evidence-title',role);const body=$('evidence-body');body.replaceChildren(node('p',perspective));const summary=node('div',undefined,'evidence-summary');summary.append(node('span','P(up) '+percent(a?.p_up)),node('span',a?.audit?.passed?'Evidence checks passed':a?'No validated forecast':'Not yet evaluated'));body.append(summary);for(const [title,items]of [['Evidence',a?.evidence??['Collect the required source data and run a forecast to inspect this specialist.']],['Limitations',a?.limitations??[]],['Validation',a?.audit?.reasons??[]]]){if(!items.length)continue;const section=node('section',undefined,'evidence-section'),list=node('ul');section.append(node('h3',title));for(const item of items)list.append(node('li',String(item)));section.append(list);body.append(section)}body.append(node('p','Rules are experimental and uncalibrated. Evidence checks do not independently prove that a claim is true.'));$('evidence-dialog').showModal()}
-function renderSources(){const sources=Object.entries(state?.sources??{}),count=sources.filter(([,v])=>v.status==='collected').length;setText('strip-sources',sources.length?count+' / '+sources.length:'—');setText('source-summary',sources.length?count+' RETRIEVED':'NOT COLLECTED');const names={btc_prices:['BTC','Bitcoin price history','Binance · completed daily candles'],chain:['CM','Network & miner metrics','Coin Metrics · daily observations'],macro:['YF','Macro market context','Yahoo · dollar index & Treasury yield'],news:['NW','Bitcoin news','Yahoo · timestamped articles'],mood:['FG','Market sentiment','Alternative.me · Fear & Greed'],borrowing:['OI','Funding & open interest','Binance USD-M · completed settlements'],stablecoin:['SC','Stablecoin liquidity','CoinGecko key & comparable 24h snapshots required'],etf_flows:['ET','ETF fund flows','Reviewed data/etf_flows.csv required'],betting_odds:['BO','Prediction markets','Recent timestamped Kalshi BTC trade required']};const container=$('sources');container.replaceChildren();if(!sources.length){container.append(node('div','Source freshness and collection status appear here.','empty-inline'));return}for(const [name,value]of sources){const [glyph,title,description]=names[name]??[name.slice(0,2),name,''],ok=value.status==='collected',row=node('div',undefined,'source-row'),main=node('div',undefined,'source-main');main.append(node('strong',title),node('small',description+(ok?' · '+utc(value.received_at):name==='betting_odds'&&value.reason?' · '+value.reason:'')));const status=node('span',undefined,'source-state'+(ok?'':' missing'));status.append(node('i',undefined,'status-dot'),document.createTextNode(ok?'Retrieved':'Needs setup'));row.append(node('span',glyph,'source-icon'),main,status);if(value.reason)row.title=String(value.reason);container.append(row)}}
+function renderAgents(){const f=state?.forecast,body=$('agent-rows');body.replaceChildren();let shown=0;roles.forEach(([role,glyph,perspective,color],i)=>{const progress=state?.activity?.agents?.find(a=>a.role===role),a=f?.agents.find(a=>a.role===role)??progress?.result,active=!!a&&a.p_up!==null&&a.p_up!==undefined;const queued=!a&&(!progress||['queued','not_run'].includes(progress.status)),running=progress?.status==='running';if(filter==='active'&&!active||filter==='missing'&&(active||running||queued)||search&&!((role+' '+perspective).toLowerCase().includes(search)))return;shown++;const row=node('tr');row.append(node('td',String(i+1).padStart(2,'0')));const name=node('td'),wrap=node('div',undefined,'agent-name');wrap.append(agentIcon(role),node('span',role));name.append(wrap);row.append(name,node('td',perspective,'agent-perspective'));const direction=!active?'—':a.p_up>.5?'Bullish':a.p_up<.5?'Bearish':'Neutral',signal=node('td');signal.append(node('span',direction,'signal '+(!active?'missing':a.p_up>.5?'up':a.p_up<.5?'down':'neutral')));row.append(signal);const prob=node('td'),group=node('div',undefined,'prob-cell'),bar=node('span',undefined,'prob-bar'),fill=node('i');fill.style.width=active?a.p_up*100+'%':'0%';bar.append(fill);group.append(node('strong',percent(a?.p_up)),bar);prob.append(group);row.append(prob,node('td',active?percent(f?.weights?.[a.agent]):'—'));const status=node('td'),label=node('span',undefined,'status-cell'+(active?' active':''));label.append(node('i'),document.createTextNode(running?'Evaluating':progress?.status==='not_run'?'Not reached':queued?'Queued':active?'Active':progress?.status==='failed'?'Failed':'Abstaining'));status.append(label);row.append(status);const evidence=node('td'),button=node('button',a?'View report ↗':'Requirements ↗','report-button');button.addEventListener('click',()=>openEvidence(role,perspective,a));evidence.append(button);row.append(evidence);body.append(row)});if(!shown){const row=node('tr'),cell=node('td','No specialists match this filter.','empty-inline');cell.colSpan=8;row.append(cell);body.append(row)}setText('table-caption',f?shown+' specialists shown · forecast '+utc(f.created_at):state?.activity?.status==='running'?shown+' specialists shown · results arrive as each returns':shown+' registered specialists · no forecast yet')}
+function openEvidence(role,perspective,a){$('evidence-title').replaceChildren(agentIcon(role),node('span',role));const body=$('evidence-body');body.replaceChildren(node('p',perspective));const summary=node('div',undefined,'evidence-summary');summary.append(node('span','P(up) '+percent(a?.p_up)),node('span',a?.audit?.passed?'Evidence checks passed':a?'No validated forecast':'Not yet evaluated'));body.append(summary);for(const [title,items]of [['Evidence',a?.evidence??['Collect the required source data and run a forecast to inspect this specialist.']],['Limitations',a?.limitations??[]],['Validation',a?.audit?.reasons??[]]]){if(!items.length)continue;const section=node('section',undefined,'evidence-section'),list=node('ul');section.append(node('h3',title));for(const item of items)list.append(node('li',String(item)));section.append(list);body.append(section)}body.append(node('p','Rules are experimental and uncalibrated. Evidence checks do not independently prove that a claim is true.'));$('evidence-dialog').showModal()}
+function renderSources(){
+    const sources=Object.entries(state?.sources??{}),count=sources.filter(([,v])=>v.status==='collected').length;
+    setText('strip-sources',sources.length?count+' / '+sources.length:'—');
+    setText('source-summary',sources.length?count+' RETRIEVED':'NOT COLLECTED');
+    const names={
+        btc_prices:[['Chart'],'Bitcoin price history','Binance · completed daily candles'],
+        chain:[['Network','Miner'],'Network & miner metrics','Coin Metrics · daily observations'],
+        macro:[['World economy'],'Macro market context','Yahoo · dollar index & Treasury yield'],
+        news:[['News'],'Bitcoin news','Yahoo · timestamped articles'],
+        mood:[['Mood'],'Market sentiment','Alternative.me · Fear & Greed'],
+        borrowing:[['Borrowing'],'Funding & open interest','Binance USD-M · completed settlements'],
+        stablecoin:[['Stablecoin'],'Stablecoin liquidity','CoinGecko key & comparable 24h snapshots required'],
+        etf_flows:[['ETF'],'ETF fund flows','Reviewed data/etf_flows.csv required'],
+        betting_odds:[['Betting odds'],'Prediction markets','Recent timestamped Kalshi BTC trade required'],
+    };
+    const container=$('sources');container.replaceChildren();
+    if(!sources.length){container.append(node('div','Source freshness and collection status appear here.','empty-inline'));return}
+    for(const [name,value]of sources){
+        const [identities,title,description]=names[name]??[[],name,''];
+        const ok=value.status==='collected',row=node('div',undefined,'source-row'),main=node('div',undefined,'source-main');
+        main.append(node('strong',title),node('small',description+(ok?' · '+utc(value.received_at):name==='betting_odds'&&value.reason?' · '+value.reason:'')));
+        const status=node('span',undefined,'source-state'+(ok?'':' missing'));
+        status.append(node('i',undefined,'status-dot'),document.createTextNode(ok?'Retrieved':'Needs setup'));
+        const icons=node('span',undefined,'source-icons');identities.forEach(role=>icons.append(agentIcon(role)));
+        row.append(icons,main,status);
+        if(value.reason)row.title=String(value.reason);container.append(row);
+    }
+}
 function renderPaper(){
     const p=state?.paper;
     if(!p){
@@ -157,7 +211,9 @@ function renderLiveCoins({ learning, forecast }) {
     const participation = weight != null ? 'Active' : result ?
       'Abstained · ' + forecastReason(role, result.evidence?.[0] ?? 'No validated forecast') : 'Awaiting forecast';
     const row = node('tr');
-    row.append(node('td', role), node('td', num(balance)),
+    const name = node('td'), identity = node('div', undefined, 'agent-name');
+    identity.append(agentIcon(role), node('span', role));name.append(identity);
+    row.append(name, node('td', num(balance)),
       node('td', stakeResult ? formatCoinChange(stakeResult.coins_after - stakeResult.coins_before) : '—'),
       node('td', percent(result && weight == null ? 0 : weight)),
       node('td', participation));

@@ -15,3 +15,85 @@ h1,h2,.asset-name,.asset-price,.market-stat>strong,.gauge-value>span,.decision-h
 .button.primary,.button.primary svg{color:#f8faf5!important}.brand-mark{color:#f8faf5}.activity-agent-reason,.activity-phase span:not(.activity-indicator),.activity-summary,.activity-log li>div>span,.activity-log small,.activity-log time,.activity-bottom{color:#738173}.activity-agent-value small,.activity-agent-status{color:#778373}
 
 .activity-methods{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:13px}.activity-methods:empty{display:none}.activity-methods>div{padding:12px;border:1px solid #d6ddd1;background:#e9eee4;border-radius:6px;display:grid;gap:7px}.activity-methods span{font-size:9px;color:#7f8979}.activity-methods strong{font-size:19px;font-weight:550;color:#52695f;letter-spacing:-.5px}.activity-methods>div:first-child{background:#e2e9e7;border-color:#bfcfcb}.activity-methods>div:first-child strong{color:#4f6e76}@media(max-width:760px){.activity-methods>div{padding:10px}.activity-methods span{font-size:8px}.activity-methods strong{font-size:16px}}
+/* Specialist identities: stable colors for cards and the specialist table. */
+.agent-chart{--agent-accent:#3566a1;--agent-wash:#edf3fb;--agent-line:#d0deef}
+.agent-borrowing{--agent-accent:#946621;--agent-wash:#faf3e5;--agent-line:#eadbbd}
+.agent-network{--agent-accent:#23796f;--agent-wash:#eaf5f1;--agent-line:#c9e3d9}
+.agent-miner{--agent-accent:#9a603c;--agent-wash:#faf0e9;--agent-line:#ead5c8}
+.agent-stablecoin{--agent-accent:#4e743d;--agent-wash:#eff5e8;--agent-line:#d7e4c9}
+.agent-etf{--agent-accent:#7757a2;--agent-wash:#f3eef9;--agent-line:#dfd2ed}
+.agent-news{--agent-accent:#505eaa;--agent-wash:#eef0fb;--agent-line:#d4daf1}
+.agent-mood{--agent-accent:#a25276;--agent-wash:#faedf3;--agent-line:#eccfdd}
+.agent-world-economy{--agent-accent:#36758a;--agent-wash:#ebf4f7;--agent-line:#cde1e8}
+.agent-betting{--agent-accent:#8c548d;--agent-wash:#f7edf7;--agent-line:#e6d0e6}
+.agent-crash{--agent-accent:#a24c43;--agent-wash:#fbefed;--agent-line:#edcfca}
+.agent-long-term{--agent-accent:#6d722f;--agent-wash:#f5f5e8;--agent-line:#e0e2bf}
+.agent-contrarian{--agent-accent:#80634b;--agent-wash:#f5f0e9;--agent-line:#e0d5c8}
+
+/* Color identifies the specialist; labelled status pills identify its state. */
+.activity-grid{gap:14px}
+.activity-agent{
+    display:flex;flex-direction:column;min-height:160px;padding:17px;
+    border:1px solid var(--agent-line,#d9dfd8);
+    border-top:3px solid var(--agent-accent,#75887f);border-radius:11px;
+    background:linear-gradient(145deg,var(--agent-wash,#f5f7f2),#fdfefb 78%);
+    box-shadow:0 2px 5px #243a3210;
+}
+.activity-agent.forecasted,.activity-agent.abstained,.activity-agent.failed,.activity-agent.not_run{
+    border-top:3px solid var(--agent-accent,#75887f);
+}
+.activity-agent.running{
+    background:linear-gradient(145deg,var(--agent-wash,#f5f7f2),#fdfefb 78%);
+    border-color:var(--agent-accent,#75887f);box-shadow:0 0 0 3px var(--agent-wash,#e8eee8);
+}
+.activity-agent-top{gap:10px;align-items:center;min-height:32px}
+.activity-agent-top strong{font-size:12px;font-weight:650;line-height:1.4;color:#2d3d48}
+.agent-glyph[class*="agent-"]{
+    background:var(--agent-wash,#edf1ed);border-color:var(--agent-line,#d9dfd8);
+    color:var(--agent-accent,#526b60);
+}
+.activity-agent-top .agent-glyph{height:32px;width:32px;flex-shrink:0;border-radius:9px;font-size:10px;font-weight:700}
+.activity-agent-status{
+    align-self:flex-start;align-items:center;gap:5px;margin-top:13px;padding:4px 7px;
+    border:1px solid #dce2df;border-radius:5px;background:#f4f6f3;
+    font-size:8px;font-weight:600;line-height:1.3;letter-spacing:.45px;color:#64716b;
+}
+.activity-agent-status::before{content:"";height:5px;width:5px;border-radius:50%;background:currentColor;flex-shrink:0}
+.activity-agent.forecasted .activity-agent-status{color:#367353;background:#eef7ef;border-color:#d1e5d5}
+.activity-agent.running .activity-agent-status{color:#356b91;background:#edf4fa;border-color:#d2e2ef}
+.activity-agent.abstained .activity-agent-status,.activity-agent.not_run .activity-agent-status{color:#69716e;background:#f3f4f1;border-color:#dce0d9}
+.activity-agent.failed .activity-agent-status{color:#a4544c;background:#fcf0ed;border-color:#edcfc9}
+.activity-agent-value{gap:8px;margin-top:13px;color:#2d3d48;font-size:15px;font-weight:650;line-height:1.4}
+.activity-agent-value small{color:#697871;font-size:10px;font-weight:400}
+.activity-agent-reason{color:#61716a;font-size:11px;line-height:1.65;margin-top:9px}
+.activity-agent .report-button{color:var(--agent-accent,#526b60);font-size:10px;align-self:flex-start;margin-top:10px;line-height:1.5}
+.activity-agent .report-button:hover{text-decoration:underline;text-underline-offset:3px}
+@media(max-width:1200px){
+    .activity-body{grid-template-columns:1fr}
+    .activity-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
+    .activity-log-panel{position:static}
+    .activity-log{max-height:260px}
+}
+@media(max-width:900px){.activity-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:760px){
+    .activity-grid{gap:12px}
+    .activity-agent{padding:15px;min-height:150px}
+    .activity-agent-top strong{font-size:12px}
+    .activity-agent-value{font-size:14px}
+    .activity-agent-reason{font-size:11px}
+    .activity-agent-value small,.activity-agent .report-button{font-size:10px}
+}
+@media(max-width:520px){.activity-grid{grid-template-columns:1fr}}
+
+/* One shared vector identity for each specialist, across every agent view. */
+.agent-icon{display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;width:24px;height:24px;color:var(--agent-accent,#526b60);background:none;border:0;vertical-align:middle}
+.agent-icon svg{width:100%;height:100%;stroke-width:1.65;fill:none}
+.activity-agent-top .agent-icon{width:27px;height:27px;margin-right:1px}
+.agent-name .agent-icon{width:21px;height:21px}
+.activity-event-name{display:flex;align-items:center;gap:7px}
+.activity-event-name .agent-icon{width:16px;height:16px}
+#evidence-title{display:flex;align-items:center;gap:12px}
+#evidence-title .agent-icon{width:29px;height:29px}
+.source-icons{display:inline-flex;align-items:center;justify-content:center;gap:4px;min-width:28px;flex-shrink:0}
+.source-icons .agent-icon{width:21px;height:21px}
+.source-icons:has(.agent-icon:nth-child(2)) .agent-icon{width:17px;height:17px}
