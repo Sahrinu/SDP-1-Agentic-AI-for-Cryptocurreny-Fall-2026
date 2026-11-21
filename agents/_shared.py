@@ -53,7 +53,7 @@ def published_history(day, data, key, fields, *, max_age):
     if frame.empty:
         raise ValueError(f"no complete published {key} observations")
     if (pd.Timestamp(day).date() - frame.index[-1].date()).days > max_age:
-        raise ValueError(f"{key} latest observation exceeds {max_age} calendar days")
+        raise ValueError(f"Latest complete {key} observation is {frame.index[-1].date()} UTC; maximum age is {max_age} calendar days")
     for field in fields:
         if frame[field].map(lambda x: isinstance(x, bool)).any():
             raise ValueError(f"{field} cannot be boolean")
@@ -75,8 +75,9 @@ def daily_prices(day, data, *, minimum, full=False):
     frame = frame[frame.index < boundary].sort_index()
     if frame.index.has_duplicates or len(frame) < minimum:
         raise ValueError(f"need {minimum} unique daily BTC closes")
-    if frame.index[-1] != boundary - pd.Timedelta(days=1):
-        raise ValueError("BTC history does not include the forecast day's completed close")
+    expected = boundary - pd.Timedelta(days=1)
+    if frame.index[-1] != expected:
+        raise ValueError(f"Latest completed BTC candle is {frame.index[-1].date()}; expected {expected.date()} UTC")
     window = frame if full else frame.tail(minimum)
     if any((b - a).days != 1 for a, b in zip(window.index, window.index[1:])):
         raise ValueError("BTC lookback must have consecutive UTC days")

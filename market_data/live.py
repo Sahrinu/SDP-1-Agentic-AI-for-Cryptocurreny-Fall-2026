@@ -3,6 +3,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import json
 import os
+import time
 from urllib.parse import urlencode
 import pandas as pd
 from market_data.bitcoin.binance import parse_candles
@@ -137,7 +138,7 @@ def collect_news():
 
 
 def collect_betting_inputs(directory, *, observe=None):
-    """One read-only stream attempt; persist the exact frame or failure report.
+    """Read public market evidence and persist the source record or failure.
 
     Call immediately before choosing a new prediction timestamp. REST listing
     prices and historical fixtures are never substituted for a fresh book.
@@ -146,23 +147,42 @@ def collect_betting_inputs(directory, *, observe=None):
     directory.mkdir(parents=True, exist_ok=True)
     report = None
     try:
-        from market_data.prediction_markets.limitless_live import observe_current_market
+        from market_data.prediction_markets.kalshi_live import observe_bitcoin_trade
         from agents.specialists.market_evidence_specialist import prepare_evidence
-        report = (observe or observe_current_market)()
+        report = (observe or observe_bitcoin_trade)()
+        if observe is None and report.get('stage') == 'recent_trades':
+            time.sleep(2)
+            report = observe_bitcoin_trade()
         receipt = now()
-        if report.get('observation_status') != 'book_observed':
-            raise ValueError('No qualifying public book received')
+        if report.get('observation_status') not in {'book_observed', 'trade_observed'}:
+            raise ValueError('No qualifying public market evidence received')
         prepare_evidence(report, receipt, receipt + timedelta(hours=24),
             price_source='binance:BTC/USDT',
             reference_price_definition='last completed UTC one-minute close at or before each contract timestamp')
         status = {'status': 'collected', 'received_at': receipt.isoformat(),
                   'provider_event_time': report['quote']['provider_event_time'],
-                  'market_slug': report['market']['slug']}
+                  'market_slug': report['market'].get('ticker') or report['market']['slug'],
+                  'provider': report.get('provider', 'limitless')}
         inputs = {'student2_market_observation': report,
                   'student2_markets_observed_at': receipt.isoformat()}
     except Exception as exc:
         status = {'status': 'unavailable', 'reason': type(exc).__name__,
                   'detail': 'No validated fresh two-sided book; Betting Odds will abstain.'}
+        if observe is None:
+            status.update(provider='kalshi', reason='No fresh eligible Kalshi BTC trade was available',
+                          detail=f'Kalshi collection ended with {type(exc).__name__}.')
+        elif isinstance(report, dict):
+            if report.get('error_type') == 'InitialBookOnlyError':
+                status.update(reason='Limitless sent only its initial snapshot; no fresh book update arrived',
+                              detail='Betting Odds abstained while waiting for a verified live update.')
+            elif report.get('stage') == 'bounded_market_discovery':
+                status['reason'] = 'Limitless market discovery found no validated market'
+            elif report.get('stage') == 'book_stream':
+                status['reason'] = 'No qualifying fresh Limitless order-book update arrived'
+            waited = report.get('book_wait_seconds')
+            if isinstance(waited, (int, float)):
+                status['book_wait_seconds'] = waited
+                status['reason'] += f' (waited {waited:g} seconds)'
         inputs = {}
         if not isinstance(report, dict):
             report = {'observation_status': 'failed', 'error_type': type(exc).__name__}
@@ -190,6 +210,10 @@ def collect_snapshot(directory, *, input_directory=None):
             value = fn()
             statuses[name] = {'status':'collected','received_at':now().isoformat()}
             return value
+        except FileNotFoundError:
+            reason = 'Missing reviewed data/etf_flows.csv' if name == 'etf_flows' else 'FileNotFoundError'
+            statuses[name] = {'status':'unavailable','reason':reason}
+            return None
         except Exception as exc:
             statuses[name] = {'status':'unavailable','reason':type(exc).__name__}
             return None
@@ -200,9 +224,8 @@ def collect_snapshot(directory, *, input_directory=None):
     if chain:
         data.update(chain)
     def macro():
-        from market_data.macro import collect
-        end = now().date() - timedelta(days=1)
-        frame = collect(end-timedelta(days=60), end, output=directory/'macro.csv', clock=now)
+        from market_data.yahoo_dashboard import collect_yahoo
+        frame = collect_yahoo('macro', directory)
         # Use the completed download time for the whole retrieved vintage; it is
         # not a provider publication timestamp or historical availability proof.
         receipts = frame['retrieval_completed_at'].dropna().unique()
@@ -218,7 +241,13 @@ def collect_snapshot(directory, *, input_directory=None):
     value = attempt('macro', macro)
     if value is not None:
         data['macro'] = value
-    value = attempt('news', collect_news)
+    def news():
+        from market_data.yahoo_dashboard import collect_yahoo
+        articles = collect_yahoo('news', directory)
+        if not articles:
+            raise ValueError('Yahoo returned no recent news articles')
+        return articles
+    value = attempt('news', news)
     if value:
         data['student2_news_articles'] = value
         data['student2_news_observed_at'] = now().isoformat()
@@ -262,6 +291,8 @@ def collect_snapshot(directory, *, input_directory=None):
     value = attempt('stablecoin', stablecoin)
     if value is not None:
         data['stablecoin'] = value
+    elif not os.environ.get('COINGECKO_DEMO_API_KEY'):
+        statuses['stablecoin']['reason'] = 'COINGECKO_DEMO_API_KEY is not configured'
     def etf():
         from market_data.etf import import_flows
         if input_directory is None:
@@ -272,7 +303,7 @@ def collect_snapshot(directory, *, input_directory=None):
     if value is not None:
         data['etf_flows'] = value
     statuses['betting_odds'] = {'status':'unavailable',
-        'reason':'A fresh public book is requested immediately before Generate 24h forecast; no REST-price substitution'}
+        'reason':'A fresh public Kalshi BTC trade is requested immediately before Generate 24h forecast'}
     # Persist the exact vintage for provenance; not eligible for old-date replay.
     for key,value in data.items():
         if isinstance(value,pd.DataFrame):

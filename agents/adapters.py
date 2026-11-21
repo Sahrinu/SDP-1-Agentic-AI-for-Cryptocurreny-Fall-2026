@@ -143,28 +143,37 @@ class Student2Adapter:
         if not isinstance(observation, dict):
             return self._missing(day, ['A saved student2_market_observation with a validated timestamped book is required.'])
         try:
-            if _timestamp(observation['quote']['received_at']) > observed:
+            received = _timestamp(observation['quote']['received_at'])
+            if received > observed:
                 return self._missing(day, ['The book was received after the attested observation time.'])
         except (KeyError, TypeError, ValueError, OverflowError):
             return self._missing(day, ['Missing or invalid book observation receipt timestamp.'])
-        if not callable(self.model_client) and not hasattr(self.model_client, 'with_structured_output'):
-            return self._missing(day, ['No explicit Betting Odds model callable was supplied; no model call was attempted.'])
+        if (prediction - received).total_seconds() > 300:
+            return self._missing(day, ['The market book was older than five minutes at forecast time.'])
         try:
-            model_call = self.model_client
-            if hasattr(self.model_client, 'with_structured_output'):
-                structured = self.model_client.with_structured_output(evidence.ModelEstimate, method='json_schema')
-                model_call = lambda prompt: structured.invoke([HumanMessage(content=prompt)])
-            price_context = data.get('student2_price_context')
-            if price_context is None:
-                result = evidence.forecast_from_market_evidence(observation,
-                    prediction_time=prediction,target_time=target,price_source=contract['price_source'],
-                    reference_price_definition=contract['reference_price_definition'],model_call=model_call)
+            if observation.get('provider') == 'kalshi' and 'btc_hourly' in data and '_reference_close' in data:
+                result = evidence.forecast_kalshi_with_context(observation, prediction, target,
+                    price_source=contract['price_source'],
+                    reference_price_definition=contract['reference_price_definition'],
+                    reference_price=data['_reference_close'], hourly_bars=data['btc_hourly'])
             else:
-                from agents.specialists import market_evidence_with_prices as enriched
-                if (contract['price_source'],contract['reference_price_definition']) != ('binance:BTC/USDT','spot_price'):
-                    return self._missing(day, ['The supplied price-context workflow requires the explicit Binance BTC/USDT spot target.'])
-                features = enriched.prepare(observation,price_context,prediction)
-                result = enriched.evaluate(features,model_call)
+                if not callable(self.model_client) and not hasattr(self.model_client, 'with_structured_output'):
+                    return self._missing(day, ['No explicit Betting Odds model callable was supplied; no model call was attempted.'])
+                model_call = self.model_client
+                if hasattr(self.model_client, 'with_structured_output'):
+                    structured = self.model_client.with_structured_output(evidence.ModelEstimate, method='json_schema')
+                    model_call = lambda prompt: structured.invoke([HumanMessage(content=prompt)])
+                price_context = data.get('student2_price_context')
+                if price_context is None:
+                    result = evidence.forecast_from_market_evidence(observation,
+                        prediction_time=prediction,target_time=target,price_source=contract['price_source'],
+                        reference_price_definition=contract['reference_price_definition'],model_call=model_call)
+                else:
+                    from agents.specialists import market_evidence_with_prices as enriched
+                    features = enriched.prepare(observation, price_context, prediction,
+                        target_time=target, price_source=contract['price_source'],
+                        reference_price_definition=contract['reference_price_definition'])
+                    result = enriched.evaluate(features,model_call)
             if result.agent != evidence.NAME or _timestamp(result.prediction_time) != prediction or _timestamp(result.target_time) != target:
                 return self._missing(day, ['Specialist result identity or timestamps do not match the forecast contract.'])
         except Exception as exc:

@@ -1,6 +1,6 @@
 """Run with python -m dashboard; loopback-only HTTP service."""
 import argparse
-from datetime import datetime,timezone
+from datetime import datetime,timedelta,timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 from pathlib import Path
@@ -43,20 +43,32 @@ def create_server(port=8765, *, root=ROOT, bind=True):
         summary['problem'] = problem
         with lock:
             state['learning'] = summary
+    def collect_inputs():
+        from market_data.live import collect_snapshot
+        directory = root/'outputs/dashboard/snapshots'/datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S%fZ')
+        collected, sources = collect_snapshot(directory, input_directory=root/'data')
+        with lock:
+            data.clear()
+            data.update(collected)
+            state['sources'] = sources
+            latest_snapshot['directory'] = str(directory)
+
     def work(action):
         try:
             if action == 'collect':
-                from market_data.live import collect_snapshot
-                directory = root/'outputs/dashboard/snapshots'/datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S%fZ')
-                collected,sources = collect_snapshot(directory, input_directory=root/"data")
-                latest_snapshot['directory'] = str(directory)
+                collect_inputs()
                 settle_live()
                 with lock:
-                    data.clear(); data.update(collected)
-                    state.update(sources=sources,forecast=None,paper=None,debate=None,message='Collection finished. Inspect source status, then run forecast.')
+                    state.update(forecast=None,paper=None,debate=None,message='Collection finished. Inspect source status, then run forecast.')
             elif action == 'forecast':
                 from market_data.live import collect_news, collect_recent_bitcoin, reference_quote, refresh_betting_inputs
                 settle_live()
+                prices = data.get('btc_prices')
+                prior_day = datetime.now(timezone.utc).date() - timedelta(days=1)
+                if prices is not None and not prices.empty and prices.index.max().date() < prior_day:
+                    with lock:
+                        state['message'] = 'Refreshing live inputs before forecasting.'
+                    collect_inputs()
                 with lock:
                     forecast_data = dict(data)
                 news_capture = None
@@ -113,7 +125,7 @@ def create_server(port=8765, *, root=ROOT, bind=True):
                     from model_clients.demo_gemini import DemoGemini
                     client = DemoGemini(api_key=credentials.resolved_key())
                 with lock:
-                    state['message'] = 'Reading a fresh public prediction-market book before forecasting.'
+                    state['message'] = 'Checking recent public Kalshi BTC trades before forecasting.'
                 book_directory = root/'outputs/dashboard/books'/datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S%fZ')
                 book_status = refresh_betting_inputs(forecast_data, book_directory)
                 with lock:
@@ -152,7 +164,17 @@ def create_server(port=8765, *, root=ROOT, bind=True):
                 result = store.decide(state['forecast'])
                 with lock:
                     state.update(paper=result,message='Paper decision recorded. Repeating this decision cannot place a duplicate trade.')
+            elif action == 'archive-replay':
+                from dashboard.archive import replay_saved_forecasts
+                from market_data.live import target_quote
+                directory = root/'outputs/dashboard'
+                destination = directory/'archive_replays'/datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S%fZ')
+                replay = replay_saved_forecasts(directory/'forecasts', destination, target_quote)
+                with lock:
+                    state.update(replay=replay, message=f"Settled {len(replay['coins'])} archived live forecasts for review.")
             elif action == 'real-replay':
+                from agents.adapters import Student2Adapter
+                from agents.registry import CATALOG
                 from experiments.run import run
                 from experiments.paper import TradingPolicy
                 from experiments.evaluation import trading_baselines
@@ -165,13 +187,17 @@ def create_server(port=8765, *, root=ROOT, bind=True):
                 frame.to_csv(inputs/'btc_prices.csv',index_label='date')
                 end = frame.index[-1].date()-pd.Timedelta(days=1)
                 start = end-pd.Timedelta(days=59)
+                adapters = [Student2Adapter(spec.registration.split(':')[1])
+                            for spec in CATALOG if spec.registration.startswith('adapter:')]
                 results,coins,attacks,summary = run(str(start),str(end),0,inputs,ROOT/'agents',directory,
+                    student2_adapters={adapter.AGENT_NAME: adapter for adapter in adapters},
                     paper_policy=TradingPolicy(circuit_breaker=True),synthetic=False)
                 baselines = trading_baselines(frame,start=str(start),end=str(end),output=directory/'baselines')
                 with lock:
                     state.update(replay={'mode':'REAL BTC historical replay: price-based agents only; absent non-price vintages abstain',
                         'summary':summary.to_dict(orient='records'),'results':results.to_dict(orient='records'),
-                        'baselines':baselines,'output':str(directory)},message='Real price-only replay complete. This is not the full 13-agent experiment.')
+                        'coins':coins.to_dict(orient='records'),'baselines':baselines,
+                        'output':str(directory)},message='Real price-only replay complete. This is not the full 13-agent experiment.')
             elif action == 'replay':
                 from experiments.run import run
                 from experiments.paper import TradingPolicy
@@ -182,6 +208,7 @@ def create_server(port=8765, *, root=ROOT, bind=True):
                 with lock:
                     state.update(replay={'mode':'SYNTHETIC workflow replay; fake agents and prices',
                         'summary':summary.to_dict(orient='records'),'results':results.to_dict(orient='records'),
+                        'coins':coins.to_dict(orient='records'),
                         'output':str(directory)},message='Synthetic workflow replay complete. These are not research performance results.')
         except Exception as exc:
             if action == 'forecast':
@@ -247,7 +274,7 @@ def create_server(port=8765, *, root=ROOT, bind=True):
                         credentials.set_key(key)
                     return self.respond(200,{'gemini':credentials.public_status()})
             action = self.path.removeprefix('/api/')
-            if action not in {'collect','forecast','paper','replay','debate','real-replay'} or self.path != '/api/'+action:
+            if action not in {'collect','forecast','paper','replay','debate','real-replay','archive-replay'} or self.path != '/api/'+action:
                 return self.respond(404,{'error':'Unknown action'})
             with lock:
                 if state['busy']:

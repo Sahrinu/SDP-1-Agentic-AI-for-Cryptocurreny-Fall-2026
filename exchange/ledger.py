@@ -14,6 +14,7 @@ Rules:
 - an agent seen for the first time starts with the normal starting coins
 - abstaining agents are not part of the forecast and do not bet
 """
+from contextlib import closing, contextmanager
 from datetime import datetime, timedelta, timezone
 import json
 import math
@@ -61,8 +62,10 @@ class LiveLedger:
                 coins_before REAL NOT NULL, change REAL NOT NULL, coins_after REAL NOT NULL,
                 PRIMARY KEY (forecast_id, agent))""")
 
+    @contextmanager
     def _db(self):
-        return sqlite3.connect(self.path, timeout=10)
+        with closing(sqlite3.connect(self.path, timeout=10)) as db, db:
+            yield db
 
     # ---------- coins ----------
 
@@ -189,17 +192,14 @@ class LiveLedger:
     # ---------- reading results ----------
 
     def result(self, forecast_id, *, db=None):
-        own = db is None
-        db = db or self._db()
-        try:
-            row = db.execute("""SELECT id, created_at, target_time, reference_price, exchange_p,
-                settled, target_price, target_bar_close_time, went_up, settled_at
-                FROM forecasts WHERE id = ?""", (forecast_id,)).fetchone()
-            bets = db.execute("""SELECT agent, p_up, coins_before, change, coins_after
-                FROM settlements WHERE forecast_id = ? ORDER BY agent""", (forecast_id,)).fetchall()
-        finally:
-            if own:
-                db.close()
+        if db is None:
+            with self._db() as connection:
+                return self.result(forecast_id, db=connection)
+        row = db.execute("""SELECT id, created_at, target_time, reference_price, exchange_p,
+            settled, target_price, target_bar_close_time, went_up, settled_at
+            FROM forecasts WHERE id = ?""", (forecast_id,)).fetchone()
+        bets = db.execute("""SELECT agent, p_up, coins_before, change, coins_after
+            FROM settlements WHERE forecast_id = ? ORDER BY agent""", (forecast_id,)).fetchall()
         keys = ["id", "created_at", "target_time", "reference_price", "exchange_p", "settled",
                 "target_price", "target_bar_close_time", "went_up", "settled_at"]
         out = dict(zip(keys, row))

@@ -6,9 +6,13 @@ from agents.specialists import market_evidence_specialist as model
 from market_data.prediction_markets import market_price_context as prices
 from agents.schemas import NewsSpecialistResult
 
-def prepare(observation,context,prediction):
-    features=model.prepare_evidence(observation,prediction,prediction+timedelta(hours=24),
-        price_source='binance:BTC/USDT',reference_price_definition='spot_price')
+def prepare(observation, context, prediction, *, target_time=None,
+            price_source='binance:BTC/USDT', reference_price_definition='spot_price'):
+    # The latest trade is supporting evidence, not a replacement for the
+    # caller's target reference convention or settlement definition.
+    features=model.prepare_evidence(observation,prediction,
+        target_time if target_time is not None else prediction+timedelta(hours=24),
+        price_source=price_source, reference_price_definition=reference_price_definition)
     features['evidence'].append(prices.validate(context,observation,prediction))
     features['limitations']=[s for s in features['limitations'] if not s.startswith('Current spot price, independently')]
     features['limitations']+=['Latest trade is a timestamped spot proxy, not an exact prediction-time fixing.',
@@ -17,7 +21,7 @@ def prepare(observation,context,prediction):
 
 def evaluate(features,call):
     payload=call(model.build_prompt(features))
-    value=model.ModelEstimate.model_validate(model.parse_model_object(payload))
+    value=model.parse_model_estimate(payload)
     ids={e['evidence_id'] for e in features['evidence']}
     if not set(value.evidence_ids)<=ids:raise ValueError('Unknown evidence citation')
     if value.probability_up is not None and not value.evidence_ids:raise ValueError('Missing evidence citations')
