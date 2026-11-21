@@ -16,4 +16,4 @@ dist/
 /data/stablecoin.csv
 /data/borrowing.csv
 /data/borrowing_raw/
-/data/etf_flows.csv
+# data/etf_flows.csv is tracked: reviewed Farside totals cannot be fetched automatically.

@@ -126,8 +126,12 @@ class StablecoinSnapshot:
 class CoinGeckoClient:
     """One bounded request; failures never silently substitute synthetic quotes."""
 
-    def __init__(self, api_key: str | None = None, timeout: float = 15):
+    def __init__(self, api_key: str | None = None, timeout: float = 15, *, env_file=None):
         self.api_key = api_key or os.environ.get("COINGECKO_DEMO_API_KEY")
+        if not self.api_key and env_file is not None and Path(env_file).is_file():
+            # Read only this key from the file; never export it into os.environ.
+            from dotenv import dotenv_values
+            self.api_key = dotenv_values(env_file).get("COINGECKO_DEMO_API_KEY")
         if not math.isfinite(timeout) or timeout <= 0:
             raise ValueError("timeout must be positive and finite")
         self.timeout = timeout

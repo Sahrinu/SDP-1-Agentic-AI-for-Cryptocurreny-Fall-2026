@@ -200,6 +200,15 @@ def refresh_betting_inputs(data, directory, *, observe=None):
     return status
 
 
+def coingecko_key(project=None):
+    """Environment first, else only COINGECKO_DEMO_API_KEY from the project .env (not exported)."""
+    key = os.environ.get('COINGECKO_DEMO_API_KEY')
+    if not key and project is not None and (Path(project)/'.env').is_file():
+        from dotenv import dotenv_values
+        key = dotenv_values(Path(project)/'.env').get('COINGECKO_DEMO_API_KEY')
+    return key.strip() if isinstance(key,str) and key.strip() else None
+
+
 def collect_snapshot(directory, *, input_directory=None):
     """Independent failures are recorded; unavailable sources never become synthetic."""
     directory = Path(directory)
@@ -270,7 +279,8 @@ def collect_snapshot(directory, *, input_directory=None):
     def stablecoin():
         from market_data.stablecoin.data import StablecoinSnapshot, COINS
         from market_data.stablecoin.history import export_history
-        key = os.environ.get('COINGECKO_DEMO_API_KEY')
+        project = Path(input_directory).resolve().parent if input_directory is not None else None
+        key = coingecko_key(project)
         if not key:
             raise ValueError('CoinGecko key unavailable')
         params = urlencode({'ids':','.join(COINS),'vs_currencies':'usd','include_market_cap':'true',
@@ -278,6 +288,17 @@ def collect_snapshot(directory, *, input_directory=None):
         raw = get_json('https://api.coingecko.com/api/v3/simple/price?'+params,headers={'x-cg-demo-api-key':key})
         snapshot = StablecoinSnapshot.from_payload(raw,observed_at=now(),source='coingecko')
         snapshot.validate_freshness(now())
+        target = directory/'stablecoin.csv'
+        if project is not None:
+            # Share the scheduled archiver's 15-minute receipts so a snapshot taken
+            # ~24h earlier exists; export that comparable pair, not "latest per day".
+            from market_data.stablecoin.archive import archive_snapshot
+            archive = project/'outputs/live_inputs/stablecoin_archive'
+            status = archive_snapshot(snapshot, archive, project/'data/stablecoin.csv')
+            archive_info.update(archive_status=status['status'],comparison_hours=status['comparison_hours'])
+            pair = [status['baseline'], status['snapshot']] if status['baseline'] else [status['snapshot']]
+            export_history(pair,target)
+            return pd.read_csv(target,index_col='date')
         archive = directory.parent/'stablecoin_archive'
         archive.mkdir(exist_ok=True)
         snapshot.save(archive/(snapshot.observed_at.strftime('%Y%m%dT%H%M%S%fZ')+'.json'))
@@ -285,13 +306,14 @@ def collect_snapshot(directory, *, input_directory=None):
         selected = {}
         for path in sorted(archive.glob('*.json')):
             selected[path.name[:8]] = path
-        target = directory/'stablecoin.csv'
         export_history(selected.values(),target)
         return pd.read_csv(target,index_col='date')
+    archive_info = {}
     value = attempt('stablecoin', stablecoin)
+    statuses['stablecoin'].update(archive_info)
     if value is not None:
         data['stablecoin'] = value
-    elif not os.environ.get('COINGECKO_DEMO_API_KEY'):
+    elif not coingecko_key(Path(input_directory).resolve().parent if input_directory is not None else None):
         statuses['stablecoin']['reason'] = 'COINGECKO_DEMO_API_KEY is not configured'
     def etf():
         from market_data.etf import import_flows
