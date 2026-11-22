@@ -1,4 +1,5 @@
 'use strict';
+var portfolioValuation=null,portfolioFetchError=false;
 const $=id=>document.getElementById(id);
 const token=document.querySelector('meta[name="demo-token"]').content;
 const roles=[
@@ -107,7 +108,7 @@ function renderActivity(activity){
         'Queued → evaluate evidence → validate forecast → combine.');
 }
 
-function render(s){renderActivity(s.activity);renderLiveCoins(s);setText('status-text',s.message);$('status').classList.toggle('busy',s.busy);setText('notice-end',s.busy?'WORKING':'PAPER MODE');document.querySelectorAll('[data-action]').forEach(b=>{const a=b.dataset.action;b.disabled=s.busy||(['paper','debate'].includes(a)&&!s.forecast)||(a==='debate'&&!s.gemini_configured)||(a==='real-replay'&&!s.sources?.btc_prices)});document.querySelectorAll('[data-open-key]').forEach(b=>b.disabled=s.busy);const f=s.forecast,p=f?.methods?.exchange??null,count=f?.active_count??s.activity?.forecasted_count??0;setText('prob',percent(p));setText('summary-prob',percent(p));setText('strip-coverage',count+' / 13');setText('active-count',count);$('count').replaceChildren(document.createTextNode(String(count)+' '),node('small','/ 13'));setText('filter-active-count',count);setText('filter-missing-count',f?13-count:(s.activity?.abstained_count??0)+(s.activity?.failed_count??0));setText('agent-summary',s.activity?.status==='running'?(s.activity.evaluated_count+' / 13 EVALUATED'):f||s.activity?.status==='failed'?count+' ACTIVE · '+(s.activity?.abstained_count??0)+' ABSTAINED · '+(s.activity?.failed_count??0)+' FAILED':'13 QUEUED');$('coverage-fill').style.width=(count/13*100)+'%';const dots=$('coverage-dots');dots.replaceChildren(...roles.map((_,i)=>node('i',undefined,i<count?'on':'')));$('gauge-arc').setAttribute('stroke-dasharray',p===null?'0 100':(p*100)+' 100');const bias=p===null?(f?'No usable forecast':'Awaiting forecast'):p>.5?'Upward bias':p<.5?'Downward bias':'Neutral outlook';setText('bias',bias);$('bias').className='signal-pill'+(p===null?'':p>.5?' up':p<.5?' down':'');setText('summary-signal',p===null?(f?'No validated forecasts available':'Run a forecast to reveal the signal'):bias+' · experimental probability');setText('coverage-note',!f?'Evidence determines participation':f.cap_feasible?'20% influence cap is feasible':'Displayed forecast: fewer than 5 active · BUY blocked');for(const method of ['exchange','average','vote'])setText('method-'+method,percent(f?.methods?.[method]));const window=$('forecast-window').querySelector('span');window.textContent=f?'Target: '+utc(f.contract.target_time)+' · strict higher price':'Outcome available 24 hours after forecast.';setText('cap-state',f?(f.cap_feasible?'Feasible for displayed forecast':'Infeasible: forecast BUY blocked'):'Requires ≥ 5 active');const configured=s.gemini_configured;setText('key-label',configured?'Gemini configured':'Connect Gemini');setText('model-state',configured?(s.gemini?.source==='session'?'Session key configured':'Environment key configured'):'Session key not configured');renderKeyStatus();renderAgents();renderSources();renderMarket();renderPaper();setText('contract',f?JSON.stringify({contract:f.contract,reference:f.quote,methods:f.methods,weights:f.weights,coins:f.coins,coins_basis:f.coins_basis,live_learning:s.learning,limitations:f.limitations,usage:f.usage,debate:s.debate},null,2):'Generate a forecast to inspect its event definition.');if(s.replay&&replayVersion!==s.replay.output){replayVersion=s.replay.output;renderReplay()}drawReplay()}
+function render(s){renderActivity(s.activity);renderLiveCoins(s);setText('status-text',s.message);$('status').classList.toggle('busy',s.busy);setText('notice-end',s.busy?'WORKING':'PAPER MODE');document.querySelectorAll('[data-action]').forEach(b=>{const a=b.dataset.action;b.disabled=s.busy||(['paper','debate'].includes(a)&&!s.forecast)||(a==='debate'&&!s.gemini_configured)||(a==='real-replay'&&!s.sources?.btc_prices)});document.querySelectorAll('[data-open-key]').forEach(b=>b.disabled=s.busy);const f=s.forecast,p=f?.methods?.exchange??null,count=f?.active_count??s.activity?.forecasted_count??0;setText('prob',percent(p));setText('summary-prob',percent(p));setText('strip-coverage',count+' / 13');setText('active-count',count);$('count').replaceChildren(document.createTextNode(String(count)+' '),node('small','/ 13'));setText('filter-active-count',count);setText('filter-missing-count',f?13-count:(s.activity?.abstained_count??0)+(s.activity?.failed_count??0));setText('agent-summary',s.activity?.status==='running'?(s.activity.evaluated_count+' / 13 EVALUATED'):f||s.activity?.status==='failed'?count+' ACTIVE · '+(s.activity?.abstained_count??0)+' ABSTAINED · '+(s.activity?.failed_count??0)+' FAILED':'13 QUEUED');$('coverage-fill').style.width=(count/13*100)+'%';const dots=$('coverage-dots');dots.replaceChildren(...roles.map((_,i)=>node('i',undefined,i<count?'on':'')));$('gauge-arc').setAttribute('stroke-dasharray',p===null?'0 100':(p*100)+' 100');const bias=p===null?(f?'No usable forecast':'Awaiting forecast'):p>.5?'Upward bias':p<.5?'Downward bias':'Neutral outlook';setText('bias',bias);$('bias').className='signal-pill'+(p===null?'':p>.5?' up':p<.5?' down':'');setText('summary-signal',p===null?(f?'No validated forecasts available':'Run a forecast to reveal the signal'):bias+' · experimental probability');setText('coverage-note',!f?'Evidence determines participation':f.cap_feasible?'20% influence cap is feasible':'Displayed forecast: fewer than 5 active · BUY blocked');for(const method of ['exchange','average','vote'])setText('method-'+method,percent(f?.methods?.[method]));const window=$('forecast-window').querySelector('span');window.textContent=f?'Target: '+utc(f.contract.target_time)+' · strict higher price':'Outcome available 24 hours after forecast.';setText('cap-state',f?(f.cap_feasible?'Feasible for displayed forecast':'Infeasible: forecast BUY blocked'):'Requires ≥ 5 active');const configured=s.gemini_configured;setText('key-label',configured?'Gemini configured':'Connect Gemini');setText('model-state',configured?(s.gemini?.source==='session'?'Session key configured':'Environment key configured'):'Session key not configured');renderKeyStatus();renderAgents();renderSources();renderMarket();renderPaperSettings();renderPaper();renderPortfolio();setText('contract',f?JSON.stringify({contract:f.contract,reference:f.quote,methods:f.methods,weights:f.weights,coins:f.coins,coins_basis:f.coins_basis,live_learning:s.learning,limitations:f.limitations,usage:f.usage,debate:s.debate},null,2):'Generate a forecast to inspect its event definition.');if(s.replay&&replayVersion!==s.replay.output){replayVersion=s.replay.output;renderReplay()}drawReplay()}
 function renderMarket(){const bars=market.candles||[],last=bars.at(-1),prior=bars.at(-2),f=state?.forecast;const price=f?.quote?.price??last?.close??null;$('btc-price').replaceChildren(document.createTextNode(price===null?'—':num(price)),node('small','USDT'));let change=null,basis='Waiting for market data';if(f&&last){change=(f.quote.price/last.close-1)*100;basis='since last daily close'}else if(last&&prior){change=(last.close/prior.close-1)*100;basis='last completed UTC day'}setText('price-change',change===null?basis:(change>=0?'↗ +':'↘ ')+num(change)+'% '+basis);$('price-change').className=change===null?'':change>=0?'positive':'negative';setText('price-basis',f?'Reference '+utc(f.quote.bar_close_time):last?'Closed '+last.date:'No observation yet');setText('daily-high',last?.high!==undefined?num(last.high):'—');setText('daily-low',last?.low!==undefined?'Low '+num(last.low):'Low —');setText('daily-volume',last?.volume!==undefined?num(last.volume,0)+' BTC':'—');$('chart-empty').hidden=bars.length>0;setText('chart-date',last?'Last candle · '+last.date+' UTC':'No candle history loaded');readout(last);$('candles-button').disabled=bars.length>0&&!bars.every(b=>b.high!==undefined&&b.low!==undefined);}
 function readout(bar){const r=$('chart-readout');if(!bar){r.replaceChildren(document.createTextNode('Completed UTC daily candles '),node('span','· Refresh market data to begin'));return}r.replaceChildren(node('span',bar.date+'  '),document.createTextNode('O '+num(bar.open)+'  '+(bar.high!==undefined?'H '+num(bar.high)+'  L '+num(bar.low)+'  ':'')+'C '+num(bar.close)),node('span','  · 1D / UTC'))}
 function renderAgents(){const f=state?.forecast,body=$('agent-rows');body.replaceChildren();let shown=0;roles.forEach(([role,glyph,perspective,color],i)=>{const progress=state?.activity?.agents?.find(a=>a.role===role),a=f?.agents.find(a=>a.role===role)??progress?.result,active=!!a&&a.p_up!==null&&a.p_up!==undefined;const queued=!a&&(!progress||['queued','not_run'].includes(progress.status)),running=progress?.status==='running';if(filter==='active'&&!active||filter==='missing'&&(active||running||queued)||search&&!((role+' '+perspective).toLowerCase().includes(search)))return;shown++;const row=node('tr');row.append(node('td',String(i+1).padStart(2,'0')));const name=node('td'),wrap=node('div',undefined,'agent-name');wrap.append(agentIcon(role),node('span',role));name.append(wrap);row.append(name,node('td',perspective,'agent-perspective'));const direction=!active?'—':a.p_up>.5?'Bullish':a.p_up<.5?'Bearish':'Neutral',signal=node('td');signal.append(node('span',direction,'signal '+(!active?'missing':a.p_up>.5?'up':a.p_up<.5?'down':'neutral')));row.append(signal);const prob=node('td'),group=node('div',undefined,'prob-cell'),bar=node('span',undefined,'prob-bar'),fill=node('i');fill.style.width=active?a.p_up*100+'%':'0%';bar.append(fill);group.append(node('strong',percent(a?.p_up)),bar);prob.append(group);row.append(prob,node('td',active?percent(f?.weights?.[a.agent]):'—'));const status=node('td'),label=node('span',undefined,'status-cell'+(active?' active':''));label.append(node('i'),document.createTextNode(running?'Evaluating':progress?.status==='not_run'?'Not reached':queued?'Queued':active?'Active':progress?.status==='failed'?'Failed':'Abstaining'));status.append(label);row.append(status);const evidence=node('td'),button=node('button',a?'View report ↗':'Requirements ↗','report-button');button.addEventListener('click',()=>openEvidence(role,perspective,a));evidence.append(button);row.append(evidence);body.append(row)});if(!shown){const row=node('tr'),cell=node('td','No specialists match this filter.','empty-inline');cell.colSpan=8;row.append(cell);body.append(row)}setText('table-caption',f?shown+' specialists shown · forecast '+utc(f.created_at):state?.activity?.status==='running'?shown+' specialists shown · results arrive as each returns':shown+' registered specialists · no forecast yet')}
@@ -148,7 +149,7 @@ function renderPaper(){
         setText('equity','\u2014');setText('portfolio-sub','No paper decision displayed');
         setText('decision','No recorded decision yet.');setText('decision-action','Ready when you are');
         setText('decision-reason','Generate a forecast, then record a guarded paper decision.');
-        setText('breaker-state','Not configured');setText('risk-label','PAPER ONLY');return;
+        setText('breaker-state',state?.paper_settings?.configured?'Armed · saved policy':'Not configured');setText('risk-label',state?.paper_settings?.configured?'PAPER ENABLED':'PAPER ONLY');return;
     }
     setText('equity',money(p.portfolio.equity_usd));
     setText('portfolio-sub',p.portfolio.trade_count+' paper trades \u00b7 '+money(p.portfolio.total_fees_usd)+' in fees');
@@ -166,7 +167,7 @@ function canvasContext(id){const c=$(id),rect=c.getBoundingClientRect(),ratio=Ma
 function drawPrice(){const{x,w,h}=canvasContext('price-chart'),all=market.candles||[],bars=all.slice(-range),left=12,right=Math.max(left+10,w-65),top=14,bottom=h-45,priceBottom=bottom-40,volumeTop=priceBottom+18,n=bars.length;plot=null;x.font='8px ui-monospace, SFMono-Regular, monospace';if(!n){x.strokeStyle='#dce3df';for(let k=0;k<5;k++){const y=top+k*(priceBottom-top)/4;x.beginPath();x.moveTo(left,y);x.lineTo(right,y);x.stroke()}return}const full20=ema(all.map(b=>b.close),20),full50=ema(all.map(b=>b.close),50),e20=full20.slice(-n),e50=full50.slice(-n),useCandles=chartStyle==='candles'&&bars.every(b=>b.high!==undefined&&b.low!==undefined);const vals=bars.flatMap((b,i)=>[useCandles?b.low:b.close,useCandles?b.high:b.close,...(showEma?[e20[i],e50[i]]:[])]);let lo=Math.min(...vals),hi=Math.max(...vals),span=hi-lo||hi*.02;lo-=span*.08;hi+=span*.08;span=hi-lo;const py=v=>top+(hi-v)/span*(priceBottom-top),step=(right-left)/n,px=i=>left+(i+.5)*step;for(let k=0;k<5;k++){const v=hi-k*span/4,y=py(v);x.strokeStyle='#dce3df';x.lineWidth=.7;x.beginPath();x.moveTo(left,y);x.lineTo(right,y);x.stroke();x.fillStyle='#6f7f7a';x.fillText(num(v,0),right+9,y+3)}const ticks=Math.min(5,n);for(let k=0;k<ticks;k++){const i=Math.round(k*(n-1)/Math.max(1,ticks-1)),xx=px(i);x.strokeStyle='#e4e9e4';x.beginPath();x.moveTo(xx,top);x.lineTo(xx,bottom+8);x.stroke();x.fillStyle='#77867f';const text=bars[i].date.slice(5).replace('-','/');x.fillText(text,Math.max(left,Math.min(right-25,xx-13)),h-15)}const maxVolume=Math.max(0,...bars.map(b=>b.volume??0));if(maxVolume){bars.forEach((b,i)=>{if(b.volume===undefined)return;x.fillStyle=b.close>=b.open?'#4a91783b':'#b66d7338';const y=bottom-(b.volume/maxVolume)*(bottom-volumeTop);x.fillRect(px(i)-Math.max(1,step*.55)/2,y,Math.max(1,step*.55),Math.max(1,bottom-y))});x.fillStyle='#7b8a82';x.fillText('VOL · BTC',left+3,volumeTop+3)}if(useCandles){for(let i=0;i<n;i++){const b=bars[i],xx=px(i),up=b.close>=b.open;x.strokeStyle=up?'#34866d':'#b86c76';x.fillStyle=x.strokeStyle;x.lineWidth=Math.max(.6,Math.min(1,step*.4));x.beginPath();x.moveTo(xx,py(b.high));x.lineTo(xx,py(b.low));x.stroke();const y=Math.min(py(b.open),py(b.close)),height=Math.max(1,Math.abs(py(b.open)-py(b.close))),bw=Math.max(.7,Math.min(8,step*.62));x.fillRect(xx-bw/2,y,bw,height)}}else{const gradient=x.createLinearGradient(0,top,0,priceBottom);gradient.addColorStop(0,'#6e8fb026');gradient.addColorStop(1,'#6e8fb000');x.beginPath();bars.forEach((b,i)=>i?x.lineTo(px(i),py(b.close)):x.moveTo(px(i),py(b.close)));x.lineTo(px(n-1),priceBottom);x.lineTo(px(0),priceBottom);x.closePath();x.fillStyle=gradient;x.fill();line(bars.map(b=>b.close),'#5c7f9f',1.5)}function line(values,color,width){x.strokeStyle=color;x.lineWidth=width;x.beginPath();values.forEach((v,i)=>i?x.lineTo(px(i),py(v)):x.moveTo(px(i),py(v)));x.stroke()}if(showEma){line(e20,'#a88b50',1);line(e50,'#8e83a9',1)}const last=bars.at(-1),lastY=py(last.close);x.setLineDash([3,4]);x.strokeStyle='#59857466';x.beginPath();x.moveTo(left,lastY);x.lineTo(right,lastY);x.stroke();x.setLineDash([]);x.fillStyle='#dfebe2';x.fillRect(right+3,lastY-8,61,16);x.fillStyle='#3b6b55';x.fillText(num(last.close,0),right+7,lastY+3);if(hover!==null){const i=Math.max(0,Math.min(n-1,hover)),xx=px(i),b=bars[i],yy=py(b.close);x.setLineDash([3,4]);x.strokeStyle='#8b9d9399';x.beginPath();x.moveTo(xx,top);x.lineTo(xx,bottom+5);x.moveTo(left,yy);x.lineTo(right,yy);x.stroke();x.setLineDash([]);x.fillStyle='#65817a';x.beginPath();x.arc(xx,yy,2.5,0,Math.PI*2);x.fill();readout(b)}plot={left,right,step,bars,px,py}}
 function drawReplay(){const{x,w,h}=canvasContext('replay-chart'),rows=state?.replay?.results??[],left=25,right=w-15,top=15,bottom=h-27;x.font='8px ui-monospace,monospace';for(const v of [0,.25,.5,.75,1]){const y=bottom-v*(bottom-top);x.strokeStyle=v===.5?'#c1cec5':'#dfe6df';x.setLineDash(v===.5?[3,4]:[]);x.beginPath();x.moveTo(left,y);x.lineTo(right,y);x.stroke();x.setLineDash([]);x.fillStyle='#7c8c82';x.fillText(String(Math.round(v*100)),0,y+3)}for(const [key,color]of [['exchange','#5d7c9d'],['average','#9a87ab'],['vote','#b0945e']]){x.strokeStyle=color;x.lineWidth=1.6;x.beginPath();let pen=false;rows.forEach((r,i)=>{const v=r[key]??r[key+'_clean'];if(typeof v!=='number'||!Number.isFinite(v)){pen=false;return}const a=left+i*(right-left)/Math.max(1,rows.length-1),b=bottom-v*(bottom-top);pen?x.lineTo(a,b):x.moveTo(a,b);pen=true});x.stroke()}if(rows.length){x.fillStyle='#718579';x.fillText(String(rows[0].date).slice(0,10),left,h-7);x.fillText(String(rows.at(-1).date).slice(0,10),Math.max(left,right-70),h-7)}}
 function renderKeyStatus(){const status=state?.gemini??{configured:state?.gemini_configured,source:'environment'};setText('key-current',status.configured?(status.source==='session'?'Session key configured · stored in server memory only':'Using a key from the local environment'):'No Gemini key configured');$('clear-key').hidden=status.source!=='session'}
-document.querySelectorAll('[data-action]').forEach(button=>button.addEventListener('click',async()=>{document.querySelectorAll('[data-action]').forEach(b=>b.disabled=true);try{await post(button.dataset.action);if(button.dataset.action==='forecast')$('activity').scrollIntoView({behavior:'smooth',block:'start'});await refresh()}catch(error){toast(error.message);if(state)render(state)}}));
+document.querySelectorAll('[data-action]').forEach(button=>button.addEventListener('click',async()=>{document.querySelectorAll('[data-action]').forEach(b=>b.disabled=true);try{await post(button.dataset.action,button.dataset.action==='paper'&&$('paper-action').value?{action:$('paper-action').value}:undefined);if(button.dataset.action==='paper')await refreshPortfolio();if(button.dataset.action==='forecast')$('activity').scrollIntoView({behavior:'smooth',block:'start'});await refresh()}catch(error){toast(error.message);if(state)render(state)}}));
 function openGeminiDialog(){setText('key-feedback','');$('gemini-key').value='';renderKeyStatus();$('key-dialog').showModal()}
 document.querySelectorAll('[data-open-key]').forEach(b=>b.addEventListener('click',openGeminiDialog));
 document.querySelectorAll('[data-close-dialog]').forEach(b=>b.addEventListener('click',()=>b.closest('dialog').close()));$('key-dialog').addEventListener('close',()=>{$('gemini-key').value='';setText('key-feedback','')});
@@ -177,7 +178,7 @@ document.querySelectorAll('[data-range]').forEach(b=>b.addEventListener('click',
 for(const [id,style]of [['candles-button','candles'],['line-button','line']])$(id).addEventListener('click',()=>{chartStyle=style;for(const [key,value]of [['candles-button','candles'],['line-button','line']]){$(key).classList.toggle('selected',chartStyle===value);$(key).setAttribute('aria-pressed',String(chartStyle===value))}drawPrice()});
 $('ema-toggle').addEventListener('click',()=>{showEma=!showEma;$('ema-toggle').classList.toggle('selected',showEma);$('ema-toggle').setAttribute('aria-pressed',String(showEma));drawPrice()});$('expand-chart').addEventListener('click',()=>{$('price-panel').classList.toggle('expanded');$('expand-chart').setAttribute('aria-label',$('price-panel').classList.contains('expanded')?'Collapse chart':'Expand chart');requestAnimationFrame(drawPrice)});document.addEventListener('keydown',e=>{if(e.key==='Escape'&&$('price-panel').classList.contains('expanded')){$('price-panel').classList.remove('expanded');$('expand-chart').setAttribute('aria-label','Expand chart');drawPrice()}});
 $('price-chart').addEventListener('pointermove',e=>{if(!plot)return;const rect=e.currentTarget.getBoundingClientRect(),i=Math.floor((e.clientX-rect.left-plot.left)/plot.step);hover=Math.max(0,Math.min(plot.bars.length-1,i));const b=plot.bars[hover];$('chart-tooltip').hidden=false;setText('chart-tooltip',b.date+' UTC\nClose '+num(b.close)+' USDT'+(b.volume!==undefined?'\nVolume '+num(b.volume,0)+' BTC':''));drawPrice()});$('price-chart').addEventListener('pointerleave',()=>{hover=null;$('chart-tooltip').hidden=true;readout(market.candles?.at(-1));drawPrice()});
-document.querySelectorAll('.rail nav a').forEach(a=>a.addEventListener('click',()=>{document.querySelectorAll('.rail nav a').forEach(x=>x.classList.toggle('selected',x===a))}));const resize=new ResizeObserver(()=>{drawPrice();drawReplay()});resize.observe($('price-chart').parentElement);resize.observe($('replay-chart').parentElement);renderAgents();renderActivity(null);drawPrice();drawReplay();refresh();
+document.querySelectorAll('.rail nav a').forEach(a=>a.addEventListener('click',()=>{document.querySelectorAll('.rail nav a').forEach(x=>x.classList.toggle('selected',x===a))}));const resize=new ResizeObserver(()=>{drawPrice();drawReplay();drawPortfolio()});resize.observe($('price-chart').parentElement);resize.observe($('replay-chart').parentElement);resize.observe($('portfolio-chart').parentElement);renderAgents();renderActivity(null);drawPrice();drawReplay();refresh();
 function requiresGemini(reason) {
   return reason?.startsWith('No model client was supplied') ||
     reason?.startsWith('No explicit Betting Odds model callable');
@@ -264,3 +265,97 @@ function renderReplayCoins() {
     }
   }
 }
+
+function renderPaperSettings(){
+    const config=state?.paper_settings,ready=!!config?.configured;
+    for(const [id,key] of [['paper-swing','max_forecast_swing'],['paper-loss','max_cumulative_loss'],['paper-buy-size','buy_fraction']]){
+        const input=$(id);input.disabled=ready||!!state?.busy;
+        if(ready)input.value=Number(config[key])*100;
+    }
+    $('enable-paper').hidden=ready;
+    $('enable-paper').disabled=!!state?.busy||!state?.forecast;
+    $('paper-action').disabled=!!state?.busy||!ready;
+    setText('paper-settings-summary',ready?
+        'Enabled: '+Number(config.max_forecast_swing)*100+' pp forecast change · '+Number(config.max_cumulative_loss)*100+'% loss limit · '+Number(config.buy_fraction)*100+'% of cash per BUY. Total BTC cap: 25%.':
+        'Generate a forecast, then enable paper trading. Total BTC holdings remain capped at 25% of equity.');
+}
+$('paper-settings-form').addEventListener('submit',async event=>{
+    event.preventDefault();$('enable-paper').disabled=true;setText('paper-feedback','');
+    try{
+        await post('paper/settings',{
+            max_forecast_swing:Number($('paper-swing').value)/100,
+            max_cumulative_loss:Number($('paper-loss').value)/100,
+            buy_fraction:Number($('paper-buy-size').value)/100});
+        setText('paper-feedback','Paper trading enabled. Choose a decision mode and record your next fresh forecast.');
+        await refresh();
+    }catch(error){setText('paper-feedback',error.message);renderPaperSettings()}
+});
+
+let portfolioRefreshTask=null;
+async function refreshPortfolio(){
+    if(portfolioRefreshTask)return portfolioRefreshTask;
+    portfolioRefreshTask=(async()=>{
+        try{
+            const response=await fetch('/api/portfolio');
+            if(!response.ok)throw new Error('Portfolio unavailable');
+            portfolioValuation=await response.json();
+            portfolioFetchError=false;renderPortfolio();
+        }catch{
+            portfolioFetchError=true;setText('portfolio-status','CONNECTION LOST');
+            setText('portfolio-price-status','Valuation could not be refreshed. Displayed values may be out of date.');
+            $('portfolio-price-status').classList.add('stale');
+            setText('portfolio-sub','Last known account value · connection lost');
+        }
+    })();
+    try{await portfolioRefreshTask}finally{portfolioRefreshTask=null}
+}
+function renderPortfolio(){
+    const value=portfolioValuation;
+    if(!value)return;
+    const p=value.portfolio;
+    const signed=v=>v==null?'—':(Number(v)<0?'−':'+')+money(Math.abs(Number(v)));
+    setText('portfolio-equity',money(p.equity_usd));
+    setText('portfolio-cash',money(p.cash_usd));
+    setText('portfolio-btc',p.btc==null?'—':num(Number(p.btc),8)+' BTC');
+    setText('portfolio-btc-value',money(p.btc_value_usd));
+    setText('portfolio-realized',signed(p.realized_pnl_usd));
+    setText('portfolio-unrealized',signed(p.unrealized_pnl_usd));
+    setText('portfolio-fees',money(p.total_fees_usd));
+    setText('portfolio-pnl',signed(p.total_pnl_usd)+(p.return_pct==null?'':' ('+num(Number(p.return_pct))+'%)')+' from '+money(p.initial_cash_usd)+' starting cash');
+    $('portfolio-pnl').className=p.total_pnl_usd==null?'':Number(p.total_pnl_usd)<0?'negative':'positive';
+    const age=value.quote?Math.max(0,(Date.now()-Date.parse(value.quote.bar_close_time))/1000):null;
+    const stale=portfolioFetchError||value.status==='stale'||(age!==null&&age>180);
+    setText('portfolio-status',portfolioFetchError?'CONNECTION LOST':stale?'STALE PRICE':value.status==='live'?'UPDATES EVERY MINUTE':value.status==='unavailable'?'PRICE UNAVAILABLE':'WAITING FOR PRICE');
+    setText('portfolio-price-status',value.quote?
+        (stale?'Showing the last available price. ':'')+'BTC reference '+num(Number(value.quote.price))+' USDT per BTC · price time '+utc(value.quote.bar_close_time)+' · last checked '+utc(value.last_attempt||value.quote.retrieved_at)+(value.error?' · latest refresh failed':''):
+        value.error?'Price unavailable. The server will retry automatically; balances are unchanged.':'Waiting for the first Binance price. No forecast or trade is needed.');
+    $('portfolio-price-status').classList.toggle('stale',stale||!!value.error);
+    setText('equity',money(p.equity_usd));
+    setText('portfolio-sub',p.trade_count+' paper trades · '+(stale?'last available price':value.quote?'updated automatically':'waiting for price'));
+    const points=value.history||[];
+    $('portfolio-chart-empty').hidden=points.length>0;
+    setText('portfolio-history-status',points.length?points.length+' saved observations · '+utc(points[0].time)+' to '+utc(points.at(-1).time):'No valuation observations yet');
+    drawPortfolio();
+}
+function drawPortfolio(){
+    const {x,w,h}=canvasContext('portfolio-chart');
+    const rows=(portfolioValuation?.history||[]).filter(r=>Number.isFinite(Number(r.equity_usd)));
+    const left=70,right=Math.max(left+1,w-12),top=16,bottom=h-28;
+    x.font='10px ui-monospace, SFMono-Regular, monospace';
+    if(!rows.length)return;
+    const values=rows.map(r=>Number(r.equity_usd)),times=rows.map(r=>Date.parse(r.time));
+    const lo=Math.min(...values),hi=Math.max(...values),pad=Math.max((hi-lo)*.15,1);
+    const py=v=>top+(hi+pad-v)/(hi-lo+2*pad)*(bottom-top);
+    const px=i=>rows.length===1?(left+right)/2:left+(times[i]-times[0])/Math.max(1,times.at(-1)-times[0])*(right-left);
+    for(let i=0;i<4;i++){
+        const v=lo-pad+i*(hi-lo+2*pad)/3,y=py(v);
+        x.strokeStyle='#dce3df';x.beginPath();x.moveTo(left,y);x.lineTo(right,y);x.stroke();
+        x.fillStyle='#66766e';x.fillText(money(v),2,y+3);
+    }
+    x.strokeStyle='#34866d';x.lineWidth=2;x.beginPath();
+    rows.forEach((r,i)=>{if(!i||times[i]-times[i-1]>180000)x.moveTo(px(i),py(values[i]));else x.lineTo(px(i),py(values[i]))});x.stroke();
+    x.fillStyle='#34866d';rows.forEach((r,i)=>{x.beginPath();x.arc(px(i),py(values[i]),rows.length<5?3:1.5,0,Math.PI*2);x.fill()});
+    x.fillStyle='#66766e';x.fillText(utc(rows[0].time),left,h-7);
+    if(rows.length>1)x.fillText(utc(rows.at(-1).time),Math.max(left,right-120),h-7);
+}
+(async function pollPortfolio(){await refreshPortfolio();setTimeout(pollPortfolio,5000)})();

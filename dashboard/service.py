@@ -154,14 +154,126 @@ class PaperStore:
         with sqlite3.connect(self.path) as db:
             db.execute('CREATE TABLE IF NOT EXISTS state (id INTEGER PRIMARY KEY, payload TEXT NOT NULL)')
             db.execute('CREATE TABLE IF NOT EXISTS decisions (id TEXT PRIMARY KEY, payload TEXT NOT NULL)')
+            db.execute('CREATE TABLE IF NOT EXISTS settings (id INTEGER PRIMARY KEY CHECK(id=1), payload TEXT NOT NULL)')
+            db.execute('CREATE TABLE IF NOT EXISTS valuations (id INTEGER PRIMARY KEY, price_time TEXT NOT NULL, decision_id TEXT NOT NULL, payload TEXT NOT NULL, UNIQUE(price_time, decision_id))')
+            row = db.execute('SELECT payload FROM settings WHERE id=1').fetchone()
+        if row and risk_policy is None and risk_state_path is None and buy_fraction is None:
+            settings = json.loads(row[0])
+            self.risk_policy = RiskPolicy(settings['max_forecast_swing'], settings['max_cumulative_loss'])
+            self.risk_state_path = self.path + '.risk.sqlite3'
+            self.buy_fraction = settings['buy_fraction']
+
+    @staticmethod
+    def _trader(saved):
+        trader = PaperTrader()
+        for key in ('cash','btc','cost_basis','realized_pnl','total_fees'):
+            if key in saved:
+                setattr(trader,key,Decimal(saved[key]))
+        trader.trades = [Trade(**t) for t in saved.get('trades',[])]
+        return trader
+
+    def settings(self):
+        ready = isinstance(self.risk_policy, RiskPolicy) and self.risk_state_path is not None and self.buy_fraction is not None
+        return {'configured': ready,
+                'max_forecast_swing': str(self.risk_policy.max_forecast_swing) if ready else None,
+                'max_cumulative_loss': str(self.risk_policy.max_cumulative_loss) if ready else None,
+                'buy_fraction': str(self.buy_fraction) if ready else None}
+
+    def configure(self, forecast, *, max_forecast_swing, max_cumulative_loss, buy_fraction, now=None):
+        """One-time, audited opt-in for this paper account, using a fresh forecast baseline."""
+        from execution.paper_trading import decimal_value
+        instant = now or datetime.now(timezone.utc)
+        created = datetime.fromisoformat(forecast['created_at'])
+        if forecast.get('mode') != 'live' or not 0 <= (instant-created).total_seconds() <= 180:
+            raise ValueError('Generate a fresh live forecast before enabling paper trading')
+        baseline = decimal_value(forecast['methods']['exchange'], 'forecast baseline')
+        if baseline > 1:
+            raise ValueError('Forecast baseline must be between zero and one')
+        policy = RiskPolicy(max_forecast_swing, max_cumulative_loss)
+        fraction = decimal_value(buy_fraction, 'BUY size', positive=True)
+        if fraction > Decimal('0.25'):
+            raise ValueError('Choose a BUY size of at most 25% of available cash')
+        settings = {'max_forecast_swing':str(policy.max_forecast_swing),
+                    'max_cumulative_loss':str(policy.max_cumulative_loss), 'buy_fraction':str(fraction)}
+        risk_path = self.path + '.risk.sqlite3'
+        with sqlite3.connect(self.path, timeout=10) as db:
+            db.execute('BEGIN IMMEDIATE')
+            if self.settings()['configured'] or db.execute('SELECT 1 FROM settings WHERE id=1').fetchone():
+                raise ValueError('Paper settings are already saved; enabling again cannot reset the circuit breaker')
+            row = db.execute('SELECT payload FROM state WHERE id=1').fetchone()
+            saved = json.loads(row[0]) if row else {}
+            if saved.get('breaker', {}).get('halted'):
+                raise ValueError('The existing circuit breaker is halted; operator review is required')
+            RiskGateway.initialize_state(risk_path, policy=policy, trader=self._trader(saved),
+                actor='local-dashboard-user', reason='Enabled paper trading with explicitly selected limits',
+                timestamp=instant, previous_forecast=baseline)
+            db.execute('INSERT INTO settings VALUES(1,?)', (json.dumps(settings),))
+        self.risk_policy, self.risk_state_path, self.buy_fraction = policy, risk_path, str(fraction)
+        return self.settings()
 
     def latest_decision(self):
         with sqlite3.connect(self.path) as db:
             row = db.execute('SELECT payload FROM decisions ORDER BY rowid DESC LIMIT 1').fetchone()
             return json.loads(row[0]) if row else None
 
-    def decide(self,forecast, *, now=None):
+    def value(self, quote=None, *, now=None, record=False):
+        """Mark current holdings without changing cash, trades, or durable risk state."""
+        from execution.paper_trading import decimal_value
         instant = now or datetime.now(timezone.utc)
+        if instant.tzinfo is None:
+            raise ValueError('Valuation needs an aware timestamp')
+        instant = instant.astimezone(timezone.utc)
+        with sqlite3.connect(self.path, timeout=10) as db:
+            db.execute('BEGIN IMMEDIATE' if record else 'BEGIN')
+            row = db.execute('SELECT payload FROM state WHERE id=1').fetchone()
+            trader = self._trader(json.loads(row[0]) if row else {})
+            previous = db.execute('SELECT payload FROM valuations ORDER BY id DESC LIMIT 1').fetchone()
+            last = json.loads(previous[0]) if previous else None
+            if quote is None and last:
+                quote = last['quote']
+            if quote is not None:
+                price = decimal_value(quote['price'], 'BTC quote', positive=True)
+                received = datetime.fromisoformat(quote['retrieved_at'])
+                bar = datetime.fromisoformat(quote['bar_close_time'])
+                if received.tzinfo is None or bar.tzinfo is None or not bar <= received <= instant:
+                    raise ValueError('Invalid valuation quote timestamps')
+                if record and last and bar < datetime.fromisoformat(last['quote']['bar_close_time']):
+                    quote = last['quote']
+                    price = decimal_value(quote['price'], 'BTC quote', positive=True)
+                    bar = datetime.fromisoformat(quote['bar_close_time'])
+                age = (instant-bar).total_seconds()
+                if record and age > 180:
+                    raise ValueError('Valuation quote is stale')
+                portfolio = trader.summary(price)
+                portfolio['btc_value_usd'] = str(trader.btc*price)
+                if record:
+                    decision = db.execute('SELECT id FROM decisions ORDER BY rowid DESC LIMIT 1').fetchone()
+                    point = {'valued_at':instant.isoformat(), 'quote':quote, **portfolio}
+                    db.execute('INSERT OR IGNORE INTO valuations(price_time,decision_id,payload) VALUES(?,?,?)',
+                        (bar.astimezone(timezone.utc).isoformat(), decision[0] if decision else '', json.dumps(point)))
+            else:
+                age = None
+                equity = trader.cash if not trader.btc else None
+                portfolio = {'initial_cash_usd':str(trader.initial_cash), 'cash_usd':str(trader.cash),
+                    'btc':str(trader.btc), 'btc_value_usd':'0' if not trader.btc else None,
+                    'equity_usd':None if equity is None else str(equity),
+                    'total_pnl_usd':None if equity is None else str(equity-trader.initial_cash),
+                    'return_pct':None if equity is None else str((equity/trader.initial_cash-1)*100),
+                    'realized_pnl_usd':str(trader.realized_pnl),
+                    'unrealized_pnl_usd':'0' if not trader.btc else None,
+                    'total_fees_usd':str(trader.total_fees), 'trade_count':len(trader.trades)}
+            rows = db.execute('SELECT payload FROM valuations ORDER BY id DESC LIMIT 1440').fetchall()
+            history = []
+            for row in reversed(rows):
+                point = json.loads(row[0])
+                history.append({'time':point['valued_at'],'price_time':point['quote']['bar_close_time'],
+                                'equity_usd':point['equity_usd']})
+            return {'portfolio':portfolio, 'quote':quote, 'price_age_seconds':age, 'history':history}
+
+    def decide(self,forecast, *, now=None, requested_action=None):
+        instant = now or datetime.now(timezone.utc)
+        if requested_action is not None and (not isinstance(requested_action,str) or requested_action not in {'BUY','SELL','HOLD'}):
+            raise ValueError('Paper action must be BUY, SELL or HOLD')
         created = datetime.fromisoformat(forecast['created_at'])
         if not 0 <= (instant-created).total_seconds() <= 180 or forecast['mode'] != 'live':
             raise ValueError('Paper action requires a live forecast less than three minutes old')
@@ -172,14 +284,10 @@ class PaperStore:
                 return json.loads(old[0])
             row = db.execute('SELECT payload FROM state WHERE id=1').fetchone()
             saved = json.loads(row[0]) if row else {}
-            trader = PaperTrader()
-            for key in ('cash','btc','cost_basis','realized_pnl','total_fees'):
-                if key in saved:
-                    setattr(trader,key,Decimal(saved[key]))
-            trader.trades = [Trade(**t) for t in saved.get('trades',[])]
+            trader = self._trader(saved)
             p = forecast['methods']['exchange']
             price = forecast['quote']['price']
-            requested = 'HOLD' if p is None else 'BUY' if p >= .55 else 'SELL' if p <= .45 else 'HOLD'
+            requested = requested_action or ('HOLD' if p is None else 'BUY' if p >= .55 else 'SELL' if p <= .45 else 'HOLD')
             action = constrained_action(requested, audit_passed=p is not None,
                                         cap_feasible=forecast['cap_feasible'])
             # Never silently clear a halt saved by the earlier dashboard implementation.
@@ -216,7 +324,7 @@ class PaperStore:
                       'max_cumulative_loss': str(self.risk_policy.max_cumulative_loss) if gateway is not None else None}
             if gateway is not None:
                 gateway.close()
-            result = {'requested':requested,'constrained':action,'risk':risk_result,
+            result = {'requested':requested,'constrained':action,'decision_mode':'manual' if requested_action else 'forecast','risk':risk_result,
                 'breaker':status,'trade':asdict(trade) if trade else None,
                 'portfolio':trader.summary(price),'forecast_id':forecast['id'],
                 'recorded_at':instant.isoformat(),'reference_quote':forecast['quote'],

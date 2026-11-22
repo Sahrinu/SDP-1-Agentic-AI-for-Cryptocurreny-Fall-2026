@@ -5,9 +5,11 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 from pathlib import Path
 import secrets
+import sqlite3
 import threading
 from dashboard.credentials import SessionCredentials, load_dashboard_environment, parse_key_payload
 from dashboard.activity import ForecastActivity
+from dashboard.valuation import PortfolioValuation
 
 from dashboard.service import forecast_snapshot,PaperStore,json_safe,market_snapshot,recent_news_snapshot
 from exchange.ledger import LiveLedger
@@ -26,6 +28,7 @@ def create_server(port=8765, *, root=ROOT, bind=True):
     data = {}
     lock = threading.Lock()
     store = PaperStore(root/'outputs/dashboard/paper.sqlite3')
+    valuation = PortfolioValuation(store)
     state['paper'] = store.latest_decision()
     ledger = LiveLedger(root/'outputs/dashboard/live_ledger.sqlite3')
     latest_snapshot = {'directory':None}  # where the last collect saved its inputs
@@ -53,7 +56,7 @@ def create_server(port=8765, *, root=ROOT, bind=True):
             state['sources'] = sources
             latest_snapshot['directory'] = str(directory)
 
-    def work(action):
+    def work(action, requested_action=None):
         try:
             if action == 'collect':
                 collect_inputs()
@@ -164,7 +167,8 @@ def create_server(port=8765, *, root=ROOT, bind=True):
                 with lock:
                     state.update(debate=result,message='Debate baseline completed on the same saved evidence. It does not alter the Exchange vote.')
             elif action == 'paper':
-                result = store.decide(state['forecast'])
+                result = store.decide(state['forecast'], requested_action=requested_action)
+                valuation.record(state['forecast']['quote'])
                 with lock:
                     state.update(paper=result,message='Paper decision recorded. Repeating this decision cannot place a duplicate trade.')
             elif action == 'archive-replay':
@@ -249,16 +253,48 @@ def create_server(port=8765, *, root=ROOT, bind=True):
                 with lock:
                     payload = market_snapshot(data,state['sources'])
                 return self.respond(200,payload)
+            if self.path == '/api/portfolio':
+                try:
+                    return self.respond(200,valuation.snapshot())
+                except (ValueError,KeyError,sqlite3.Error,OSError):
+                    return self.respond(503,{'error':'Portfolio valuation is unavailable; account history is unchanged'})
             if self.path == '/api/state':
                 with lock:
                     public = credentials.public_status()
-                    payload = dict(state,gemini_configured=public["configured"],gemini=public,activity=activity.snapshot())
+                    payload = dict(state,gemini_configured=public["configured"],gemini=public,activity=activity.snapshot(),paper_settings=store.settings())
                 return self.respond(200,payload)
             self.respond(404,{'error':'Not found'})
         def do_POST(self):
             origin = self.headers.get('Origin')
             if not self.valid_host() or self.headers.get('X-Demo-Token') != token or origin not in {None,f'http://127.0.0.1:{self.server.server_port}',f'http://localhost:{self.server.server_port}'}:
                 return self.respond(403,{'error':'Invalid local request'})
+            requested_action = None
+            if self.path in {'/api/paper/settings','/api/paper'}:
+                try:
+                    length = int(self.headers.get('Content-Length','0'))
+                    if not 0 <= length <= 1024 or self.headers.get('Transfer-Encoding'):
+                        raise ValueError('Invalid paper request size')
+                    self.connection.settimeout(5)
+                    payload = json.loads(self.rfile.read(length)) if length else {}
+                    if not isinstance(payload,dict):
+                        raise ValueError('Paper settings must be an object')
+                    if self.path == '/api/paper/settings':
+                        with lock:
+                            if state['busy']:
+                                return self.respond(409,{'error':'Wait for the current action to finish'})
+                            if state['forecast'] is None:
+                                raise ValueError('Generate a fresh live forecast before enabling paper trading')
+                            settings = store.configure(state['forecast'], **payload)
+                            state['message'] = 'Paper trading enabled. Choose Follow forecast or a manual simulated action, then record one decision per fresh forecast.'
+                        return self.respond(200,{'paper_settings':settings})
+                    if set(payload) - {'action'}:
+                        raise ValueError('Unknown paper request fields')
+                    requested_action = payload.get('action')
+                    if requested_action is not None and requested_action not in ('BUY','SELL','HOLD'):
+                        raise ValueError('Paper action must be BUY, SELL or HOLD')
+                except (ValueError,TypeError,KeyError,UnicodeError,OSError,sqlite3.Error) as exc:
+                    message = str(exc) if type(exc) is ValueError else 'Invalid paper settings or unavailable risk state'
+                    return self.respond(400,{'error':message})
             if self.path in {'/api/gemini','/api/gemini/clear'}:
                 with lock:
                     if state['busy']:
@@ -290,9 +326,20 @@ def create_server(port=8765, *, root=ROOT, bind=True):
                 elif action == 'collect':
                     activity.reset()
                 state.update(busy=True,message=action.capitalize()+' running…')
-            threading.Thread(target=work,args=(action,),daemon=True).start()
+            threading.Thread(target=work,args=(action,requested_action),daemon=True).start()
             self.respond(202,{'accepted':True})
-    return ThreadingHTTPServer(('127.0.0.1',port),Handler,bind_and_activate=bind)
+    class DashboardServer(ThreadingHTTPServer):
+        def serve_forever(self, poll_interval=.5):
+            valuation.start()
+            try:
+                return super().serve_forever(poll_interval)
+            finally:
+                valuation.stop()
+
+        def server_close(self):
+            valuation.stop()
+            super().server_close()
+    return DashboardServer(('127.0.0.1',port),Handler,bind_and_activate=bind)
 
 
 def serve(port=8765):

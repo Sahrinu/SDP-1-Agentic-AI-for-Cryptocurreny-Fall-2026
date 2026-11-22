@@ -2,6 +2,7 @@
 import io
 import json
 import re
+import sqlite3
 from pathlib import Path
 import pytest
 
@@ -306,3 +307,62 @@ def test_http_progress_is_visible_before_the_forecast_finishes(local_http,monkey
     assert state['activity']['evaluated_count']==13
     saved=json.loads((local_http.root/'outputs/dashboard/forecasts/unit-test-forecast.json').read_text())
     assert saved['activity']['status']=='completed' and saved['activity']['evaluated_count']==13
+
+
+def test_paper_setup_and_manual_order_http_roundtrip(local_http, monkeypatch):
+    from datetime import datetime, timedelta, timezone
+    import dashboard.__main__ as server_module
+    import market_data.live as live
+    now=datetime.now(timezone.utc)
+    forecast={'id':'http-paper-forecast','mode':'live','created_at':now.isoformat(),
+              'methods':{'exchange':.48},'cap_feasible':True,'agents':[],
+              'quote':{'price':60000,'retrieved_at':now.isoformat(),'bar_close_time':now.isoformat()},
+              'contract':{'prediction_time':now.isoformat(),'target_time':(now+timedelta(hours=24)).isoformat()}}
+    class InlineThread:
+        def __init__(self,target,args,**kwargs):self.target,self.args=target,args
+        def start(self):self.target(*self.args)
+    monkeypatch.setattr(server_module.threading,'Thread',InlineThread)
+    monkeypatch.setattr(server_module,'forecast_snapshot',lambda *a,**k:dict(forecast))
+    monkeypatch.setattr(server_module.ForecastActivity,'finish',lambda self:None)
+    monkeypatch.setattr(live,'collect_news',lambda:[])
+    monkeypatch.setattr(live,'reference_quote',lambda:forecast['quote'])
+    monkeypatch.setattr(live,'refresh_betting_inputs',lambda *a,**k:{'status':'unavailable'})
+    headers={'X-Demo-Token':local_http.token}
+    settings=json.dumps({'max_forecast_swing':'.2','max_cumulative_loss':'.1','buy_fraction':'.1'}).encode()
+    assert local_http('POST','/api/paper/settings',settings)[0]==403
+    assert local_http('POST','/api/paper/settings',settings,headers)[0]==400
+    assert local_http('POST','/api/forecast',headers=headers)[0]==202
+    _,snapshot,_=local_http('GET','/api/state')
+    assert json.loads(snapshot)['forecast'], snapshot
+    code,body,_=local_http('POST','/api/paper/settings',settings,headers)
+    assert code==200 and json.loads(body)['paper_settings']['configured'], body
+    assert local_http('POST','/api/paper',b'{"action":"BUY"}',headers)[0]==202
+    _,body,_=local_http('GET','/api/state');state=json.loads(body)
+    assert state['paper']['trade']['action']=='BUY'
+    assert state['paper']['portfolio']['trade_count']==1
+    code,portfolio,_=local_http('GET','/api/portfolio')
+    assert code==200
+    portfolio=json.loads(portfolio)
+    assert portfolio['portfolio']['btc']==state['paper']['portfolio']['btc']
+    assert portfolio['portfolio']['equity_usd']==state['paper']['portfolio']['equity_usd']
+    assert len(portfolio['history'])==1
+    assert local_http('POST','/api/paper/settings',settings,headers)[0]==400
+    assert local_http('POST','/api/paper',b'{"action":"SELL"}',headers)[0]==202
+    _,body,_=local_http('GET','/api/state')
+    assert json.loads(body)['paper']['portfolio']['trade_count']==1
+
+
+@pytest.mark.parametrize('body',[b'[]',b'{"action":"INVALID"}',b'{"action":[]}',b'{"unexpected":1}',b'not json'])
+def test_paper_rejects_malformed_manual_requests(local_http,body):
+    assert local_http('POST','/api/paper',body,{'X-Demo-Token':local_http.token})[0]==400
+
+
+def test_portfolio_endpoint_is_read_only_and_needs_no_forecast(local_http):
+    code,raw,_=local_http('GET','/api/portfolio')
+    value=json.loads(raw)
+    assert code==200 and value['status']=='waiting'
+    assert value['portfolio']['cash_usd']=='10000' and value['history']==[]
+    assert local_http('GET','/api/portfolio',headers={'Host':'untrusted.example'})[0]==403
+    with sqlite3.connect(local_http.root/'outputs/dashboard/paper.sqlite3') as db:
+        assert db.execute('SELECT COUNT(*) FROM decisions').fetchone()[0]==0
+        assert db.execute('SELECT COUNT(*) FROM state').fetchone()[0]==0
