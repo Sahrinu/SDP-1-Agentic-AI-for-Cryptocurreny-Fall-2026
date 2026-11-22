@@ -50,6 +50,19 @@ def test_openai_retries_without_temperature_once():
     assert "temperature" not in calls[2]
 
 
+def test_claude_falls_back_when_temperature_is_refused():
+    calls = []
+    def post(url, headers, body):
+        calls.append(dict(body))
+        if "temperature" in body:
+            raise urllib.error.HTTPError(url, 400, "bad", {}, io.BytesIO(b'{"error": {"message": "temperature is deprecated"}}'))
+        return claude_reply('{"p_up": 0.5, "reason": "x"}')
+    client = DemoClaude(api_key="k", post=post)
+    assert json.loads(client("x"))["p_up"] == 0.5
+    assert client.usage[-1]["temperature"] == "model default"
+    assert [("temperature" in c) for c in calls] == [True, False]
+
+
 def test_errors_never_include_key_or_prompt():
     def post(url, headers, body):
         raise urllib.error.HTTPError(url, 401, "unauthorized", {}, io.BytesIO(b""))

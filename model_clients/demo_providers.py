@@ -74,9 +74,27 @@ class _DemoProvider:
         self._post = post
         self.usage = []
         self.responses = []
+        self._send_temperature = True
 
     def _call(self, prompt):  # returns (text, input_tokens, output_tokens)
         raise NotImplementedError
+
+    def _post_with_temperature(self, url, headers, body):
+        """Ask for temperature 0; some newer models only allow their default, so
+        after one 400 refusal the request is repeated (and kept) without it."""
+        if self._send_temperature:
+            try:
+                return self._post(url, headers, dict(body, temperature=0))
+            except urllib.error.HTTPError as exc:
+                if exc.code != 400:
+                    raise
+                self._send_temperature = False
+        return self._post(url, headers, body)
+
+    @property
+    def temperature(self):
+        return 0 if self._send_temperature else 'model default'
+
 
     def _generate(self, prompt, schema=None):
         prompt = prompt + _schema_note(schema)
@@ -84,7 +102,7 @@ class _DemoProvider:
         record = {'provider': self.provider, 'model': self.model}
         try:
             text, tokens_in, tokens_out = self._call(prompt)
-            record.update(input_tokens=tokens_in, output_tokens=tokens_out)
+            record.update(input_tokens=tokens_in, output_tokens=tokens_out, temperature=self.temperature)
             saved = {'provider': self.provider, 'model': self.model, 'prompt': prompt, 'response_text': text}
             self.responses.append(saved)
             value = parse_model_object(text)
@@ -127,11 +145,15 @@ class DemoClaude(_DemoProvider):
     model_env = 'CLAUDE_MODEL'
     default_model = 'claude-haiku-5-5'
 
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self._send_temperature = True
+
     def _call(self, prompt):
-        data = self._post('https://api.anthropic.com/v1/messages',
-                          {'x-api-key': self._key, 'anthropic-version': '2023-06-01'},
-                          {'model': self.model, 'max_tokens': 2048, 'temperature': 0, 'system': JSON_ONLY,
-                           'messages': [{'role': 'user', 'content': prompt}]})
+        body = {'model': self.model, 'max_tokens': 2048, 'system': JSON_ONLY,
+                'messages': [{'role': 'user', 'content': prompt}]}
+        data = self._post_with_temperature('https://api.anthropic.com/v1/messages',
+                                           {'x-api-key': self._key, 'anthropic-version': '2023-06-01'}, body)
         text = ''.join(block.get('text', '') for block in data.get('content', []) if block.get('type') == 'text')
         usage = data.get('usage') or {}
         return text, usage.get('input_tokens'), usage.get('output_tokens')
@@ -150,20 +172,8 @@ class DemoOpenAI(_DemoProvider):
     def _call(self, prompt):
         body = {'model': self.model, 'response_format': {'type': 'json_object'},
                 'messages': [{'role': 'system', 'content': JSON_ONLY}, {'role': 'user', 'content': prompt}]}
-        if self._send_temperature:
-            body['temperature'] = 0
-        try:
-            data = self._post('https://api.openai.com/v1/chat/completions',
-                              {'authorization': 'Bearer ' + self._key}, body)
-        except urllib.error.HTTPError as exc:
-            # Some newer OpenAI models accept only their default temperature.
-            if exc.code == 400 and self._send_temperature:
-                self._send_temperature = False
-                body.pop('temperature', None)
-                data = self._post('https://api.openai.com/v1/chat/completions',
-                                  {'authorization': 'Bearer ' + self._key}, body)
-            else:
-                raise
+        data = self._post_with_temperature('https://api.openai.com/v1/chat/completions',
+                                           {'authorization': 'Bearer ' + self._key}, body)
         text = data['choices'][0]['message'].get('content') or ''
         usage = data.get('usage') or {}
         return text, usage.get('prompt_tokens'), usage.get('completion_tokens')
