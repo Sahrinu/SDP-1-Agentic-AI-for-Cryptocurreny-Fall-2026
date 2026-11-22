@@ -45,6 +45,16 @@ def _post(url, headers, body, timeout=60):
         return json.loads(response.read().decode('utf-8'))
 
 
+def _provider_reason(exc):
+    """The provider's own short error message (never the key or the prompt)."""
+    try:
+        data = json.loads(exc.read().decode('utf-8'))
+        message = (data.get('error') or {}).get('message') if isinstance(data.get('error'), dict) else data.get('message')
+        return str(message)[:300] if message else None
+    except Exception:
+        return None
+
+
 class ProviderError(RuntimeError):
     """A provider refused the request; the message never contains the key or the prompt."""
 
@@ -82,7 +92,9 @@ class _DemoProvider:
             return value, text
         except urllib.error.HTTPError as exc:
             record.update(error_type='HTTPError', error_code=exc.code)
-            raise ProviderError(f'{self.provider} returned HTTP {exc.code}; check the key, credit and model name') from None
+            reason = _provider_reason(exc)
+            raise ProviderError(f'{self.provider} returned HTTP {exc.code} for model {self.model}'
+                                + (f': {reason}' if reason else '; check the key, credit and model name')) from None
         except Exception as exc:
             record['error_type'] = type(exc).__name__
             raise
