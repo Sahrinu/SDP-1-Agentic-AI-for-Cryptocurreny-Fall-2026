@@ -30,9 +30,11 @@ def _mean(values):
     return statistics.mean(values) if values else None
 
 
-def load_runs(root):
+def load_runs(root, skip=()):
     runs = []
     for path in sorted(Path(root).glob("*/details.json")):
+        if path.parent.name in skip:
+            continue
         try:
             data = json.loads(path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError):
@@ -115,12 +117,17 @@ def main():
     parser.add_argument("--root", type=Path, default=ROOT / "outputs/live_attacks")
     parser.add_argument("--out", type=Path, default=ROOT / "outputs/model_comparison")
     parser.add_argument("--price", action="append", default=[], help="provider=input,output (USD per million tokens)")
+    parser.add_argument("--skip", action="append", default=[],
+                        help="run folder to leave out (e.g. a run with a wrong key or a fixed client bug); say why in the report")
     args = parser.parse_args()
     prices = {}
     for item in args.price:
         name, values = item.split("=", 1)
         a, b = values.split(","); prices[name] = (float(a), float(b))
-    table = compare(load_runs(args.root), prices)
+    table = compare(load_runs(args.root, set(args.skip)), prices)
+    if args.skip:
+        (args.out).mkdir(parents=True, exist_ok=True)
+        (args.out / "skipped_runs.txt").write_text("\n".join(args.skip) + "\n", encoding="utf-8")
     out = write(table, args.out)
     for r in table:
         shift = "—" if r["exchange_mean_shift"] is None else f"{r['exchange_mean_shift']:.4f}"

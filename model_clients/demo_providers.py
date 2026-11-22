@@ -102,7 +102,8 @@ class _DemoProvider:
         record = {'provider': self.provider, 'model': self.model}
         try:
             text, tokens_in, tokens_out = self._call(prompt)
-            record.update(input_tokens=tokens_in, output_tokens=tokens_out, temperature=self.temperature)
+            record.update(input_tokens=tokens_in, output_tokens=tokens_out, temperature=self.temperature,
+                          stop_reason=getattr(self, '_last_stop', None))
             saved = {'provider': self.provider, 'model': self.model, 'prompt': prompt, 'response_text': text}
             self.responses.append(saved)
             value = parse_model_object(text)
@@ -150,12 +151,13 @@ class DemoClaude(_DemoProvider):
         self._send_temperature = True
 
     def _call(self, prompt):
-        body = {'model': self.model, 'max_tokens': 2048, 'system': JSON_ONLY,
+        body = {'model': self.model, 'max_tokens': 8192, 'system': JSON_ONLY,
                 'messages': [{'role': 'user', 'content': prompt}]}
         data = self._post_with_temperature('https://api.anthropic.com/v1/messages',
                                            {'x-api-key': self._key, 'anthropic-version': '2023-06-01'}, body)
         text = ''.join(block.get('text', '') for block in data.get('content', []) if block.get('type') == 'text')
         usage = data.get('usage') or {}
+        self._last_stop = data.get('stop_reason')
         return text, usage.get('input_tokens'), usage.get('output_tokens')
 
 
@@ -175,6 +177,7 @@ class DemoOpenAI(_DemoProvider):
         data = self._post_with_temperature('https://api.openai.com/v1/chat/completions',
                                            {'authorization': 'Bearer ' + self._key}, body)
         text = data['choices'][0]['message'].get('content') or ''
+        self._last_stop = data['choices'][0].get('finish_reason')
         usage = data.get('usage') or {}
         return text, usage.get('prompt_tokens'), usage.get('completion_tokens')
 
