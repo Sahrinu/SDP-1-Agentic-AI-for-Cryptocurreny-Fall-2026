@@ -157,8 +157,8 @@ def run(forecast_path, ask_news, *, attacks=("bearish_claim",), repeats=2,
         out_root=ROOT / "outputs/live_attacks", debate_client=None):
     from experiments.news_robustness import ATTACKS, make_attack
 
-    if type(repeats) is not int or not 1 <= repeats <= 10:
-        raise ValueError("Use 1 to 10 repeats")
+    if type(repeats) is not int or not 1 <= repeats <= 100:
+        raise ValueError("Use 1 to 100 repeats")
     if not attacks or any(a not in ATTACKS for a in attacks):
         raise ValueError("Choose known attacks: " + ", ".join(ATTACKS))
     forecast = load_forecast(forecast_path)
@@ -251,11 +251,11 @@ def _write_csv(path, rows, *, append):
 
 
 def main():
-    from experiments.news_robustness import ATTACKS
+    from experiments.news_robustness import ATTACK_CHOICES, select_attacks
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("forecast", nargs="?", help="Saved live forecast JSON (outputs/dashboard/forecasts/...)")
     parser.add_argument("--latest", action="store_true", help="Use the newest saved live forecast")
-    parser.add_argument("--attack", choices=[*ATTACKS, "all"], default="bearish_claim")
+    parser.add_argument("--attack", choices=ATTACK_CHOICES, default="bearish_claim")
     parser.add_argument("--repeats", type=int, default=2)
     parser.add_argument("--debate", action="store_true", help="Also compare the debate (6 more Gemini calls per pair)")
     parser.add_argument("--env-file", type=Path, default=ROOT / ".env")
@@ -268,7 +268,7 @@ def main():
     client = DemoGemini()
     try:
         path = latest_forecast() if args.latest else Path(args.forecast)
-        attacks = tuple(ATTACKS) if args.attack == "all" else (args.attack,)
+        attacks = select_attacks(args.attack)
         rows, summary, folder = run(path, gemini_news_runner(client), attacks=attacks,
                                     repeats=args.repeats, debate_client=client if args.debate else None)
         print(f"Forecast {path.name}: {len(attacks)} attack(s) x {args.repeats} repeat(s)")

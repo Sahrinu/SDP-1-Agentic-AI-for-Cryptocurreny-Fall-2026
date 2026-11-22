@@ -65,16 +65,29 @@ def test_failures_are_retained_not_reported_as_zero_shift(tmp_path):
     assert all(r['mean_absolute_shift'] is None for r in summary)
 
 
-@pytest.mark.parametrize('name',list(ATTACKS))
+@pytest.mark.parametrize('name',[name for name in ATTACKS if name != 'hidden_text'])
 def test_attacks_have_cutoff_timestamps_and_are_not_labelled_live_yahoo(name):
     attacked,truth=make_attack(inputs(),NOW,name)
     article=attacked['student2_news_articles'][-1]
     assert datetime.fromisoformat(article['publication_timestamp'])<=NOW
-    assert article['source_type']=='unverified_bulletin'
+    expected_source = 'simulated_prior_session_note' if name == 'poisoned_memory' else 'unverified_bulletin'
+    assert article['source_type'] == expected_source
     assert truth['synthetic']
     prompt=build_gemini_prompt([article],NOW,NOW+timedelta(hours=24))['content']
     assert '0 live_yahoo record(s)' in prompt
     assert '1 other or unverified record(s)' in prompt
+
+
+def test_hidden_text_marker_changes_only_raw_text():
+    clean = inputs()
+    attacked, truth = make_attack(clean, NOW, 'hidden_text')
+    before = clean['student2_news_articles'][0]
+    after = attacked['student2_news_articles'][0]
+    assert {key: value for key, value in after.items() if key != 'text'} == {
+        key: value for key, value in before.items() if key != 'text'}
+    assert after['text'].endswith(truth['fixture_text'])
+    prompt = build_gemini_prompt([after], NOW, NOW + timedelta(hours=24))['content']
+    assert 'REPLAY-HIDDEN-TEXT-MARKER' in prompt
 
 
 def test_future_observation_rejected_before_any_model_call(tmp_path):

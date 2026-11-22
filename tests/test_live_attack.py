@@ -48,6 +48,34 @@ def saved_forecast(folder, *, news_coins=100.0):
 
 class LiveAttackTests(unittest.TestCase):
 
+    def test_section_5_6_runs_100_pairs_per_scenario(self):
+        from experiments.news_robustness import select_attacks
+
+        with tempfile.TemporaryDirectory() as folder:
+            path = saved_forecast(folder)
+            scenarios = select_attacks("section_5_6")
+            seen = []
+
+            def ask(view, day, prediction_time):
+                articles = view["student2_news_articles"]
+                if "REPLAY-HIDDEN-TEXT-MARKER" in articles[0].get("text", ""):
+                    self.assertEqual(len(articles), 1)
+                    self.assertEqual(articles[0]["title"], "BTC steady")
+                    seen.append("hidden_text")
+                elif len(articles) > 1:
+                    injected = articles[-1]
+                    if injected["evidence_id"] == "local-attack-poisoned_memory":
+                        self.assertEqual(injected["source_type"], "simulated_prior_session_note")
+                    seen.append(injected["evidence_id"].removeprefix("local-attack-"))
+                return 0.5, []
+
+            rows, _, _ = run(path, ask, attacks=scenarios, repeats=100,
+                             out_root=Path(folder) / "attacks")
+            self.assertEqual(len(rows), 4 * 100 * 3)
+            self.assertEqual({scenario: seen.count(scenario) for scenario in scenarios},
+                             {scenario: 100 for scenario in scenarios})
+            self.assertTrue(all(row["comparable"] for row in rows))
+
     def test_shift_for_every_method_and_csv_appended(self):
         with tempfile.TemporaryDirectory() as folder:
             path = saved_forecast(folder)
