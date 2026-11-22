@@ -7,6 +7,7 @@ Keys come only from the environment or the local .env file, never from code.
 """
 import json
 import os
+import ssl
 import time
 import urllib.error
 import urllib.request
@@ -27,10 +28,20 @@ def _schema_note(schema):
     return '\n\nReturn one JSON object that matches this JSON schema:\n' + shape
 
 
+def _tls_context():
+    # python.org builds on macOS ship without system CA certificates; use certifi's
+    # bundle when it is installed (it comes with the Gemini/requests dependencies).
+    try:
+        import certifi
+        return ssl.create_default_context(cafile=certifi.where())
+    except ImportError:
+        return ssl.create_default_context()
+
+
 def _post(url, headers, body, timeout=60):
     request = urllib.request.Request(url, data=json.dumps(body).encode('utf-8'),
                                      headers={'content-type': 'application/json', **headers}, method='POST')
-    with urllib.request.urlopen(request, timeout=timeout) as response:
+    with urllib.request.urlopen(request, timeout=timeout, context=_tls_context()) as response:
         return json.loads(response.read().decode('utf-8'))
 
 
