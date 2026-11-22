@@ -29,6 +29,7 @@ def test_news_snapshot_reuse_window():
 def test_forecast_reuses_recent_news_and_drops_it_after_failed_refetch(local_http,monkeypatch):
     from datetime import datetime, timedelta, timezone
     import time
+    from agents.registry import CATALOG
     import dashboard.__main__ as server_module
     import market_data.live as live
 
@@ -45,6 +46,10 @@ def test_forecast_reuses_recent_news_and_drops_it_after_failed_refetch(local_htt
         raise RuntimeError('Yahoo unavailable in unit test')
     def forecast(data, quote, *, client, on_progress, ledger=None):
         seen.append(data)
+        for spec in CATALOG:
+            on_progress({'event':'agent_started','role':spec.name})
+            on_progress({'event':'agent_completed','role':spec.name,'status':'abstained',
+                         'result':{'p_up':None,'evidence':['Test fixture']}})
         return {'id':'news-test-'+str(len(seen))}
     books = []
     def refresh_betting(data, directory):
@@ -58,9 +63,9 @@ def test_forecast_reuses_recent_news_and_drops_it_after_failed_refetch(local_htt
     monkeypatch.setattr(live,'reference_quote',lambda:{'source':'unit-test-only'})
     monkeypatch.setattr(server_module,'forecast_snapshot',forecast)
 
-    def run(action):
-        code,_,_=local_http('POST','/api/'+action,headers={'X-Demo-Token':local_http.token})
-        assert code == 202
+    def run(action, body=b''):
+        code,payload,_=local_http('POST','/api/'+action,body,headers={'X-Demo-Token':local_http.token})
+        assert code == 202, payload
         deadline = time.monotonic()+5
         while time.monotonic() < deadline:
             _,payload,_ = local_http('GET','/api/state')
@@ -74,6 +79,31 @@ def test_forecast_reuses_recent_news_and_drops_it_after_failed_refetch(local_htt
     state = run('forecast')
     assert not fetched and seen[-1]['student2_news_articles'] == [article]
     assert state['sources']['news']['reused'] is True
+
+    from experiments import live_attack
+    from model_clients import demo_gemini
+    class Client:
+        def __init__(self, *, api_key):
+            assert api_key == TEST_KEY
+
+        def close(self):
+            pass
+
+    def compare(path, ask_news, *, attacks, repeats, out_root):
+        assert path.is_file() and repeats == 1 and len(attacks) == 4
+        return [], [], out_root
+
+    monkeypatch.setattr(demo_gemini, 'DemoGemini', Client)
+    monkeypatch.setattr(live_attack, 'run', compare)
+    headers = {'X-Demo-Token':local_http.token}
+    assert local_http('POST','/api/fake-news-replay',b'{"repeats":101}',headers)[0] == 400
+    assert local_http('POST','/api/fake-news-replay',b'{"repeats":1}',headers)[0] == 400
+    assert local_http('POST','/api/gemini',json.dumps({'api_key':TEST_KEY}).encode(),headers)[0] == 200
+    replay_state = run('fake-news-replay', b'{"repeats":1}')
+    assert replay_state['attack_replay']['repeats'] == 1
+    assert replay_state['forecast'] == state['forecast']
+    assert local_http('POST','/api/gemini/clear',headers=headers)[0] == 200
+
     observed['at'] = datetime.now(timezone.utc)-timedelta(minutes=3)
     run('collect')
     state = run('forecast')

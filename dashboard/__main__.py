@@ -53,7 +53,7 @@ def create_server(port=8765, *, root=ROOT, bind=True):
             state['sources'] = sources
             latest_snapshot['directory'] = str(directory)
 
-    def work(action):
+    def work(action, repeats=None):
         try:
             if action == 'collect':
                 collect_inputs()
@@ -95,6 +95,7 @@ def create_server(port=8765, *, root=ROOT, bind=True):
                         with lock:
                             data['student2_news_articles'] = articles
                             data['student2_news_observed_at'] = observed_at
+                            latest_snapshot['directory'] = news_capture
                         news_status = {'status':'collected','received_at':observed_at}
                     except Exception as exc:
                         news_status = {'status':'unavailable','reason':type(exc).__name__}
@@ -164,6 +165,21 @@ def create_server(port=8765, *, root=ROOT, bind=True):
                 result = store.decide(state['forecast'])
                 with lock:
                     state.update(paper=result,message='Paper decision recorded. Repeating this decision cannot place a duplicate trade.')
+            elif action == 'fake-news-replay':
+                from experiments.live_attack import gemini_news_runner, run
+                from experiments.news_robustness import SECTION_5_6
+                from model_clients.demo_gemini import DemoGemini
+
+                forecast_path = root/'outputs/dashboard/forecasts'/(state['forecast']['id']+'.json')
+                client = DemoGemini(api_key=credentials.resolved_key())
+                try:
+                    rows, _, folder = run(forecast_path, gemini_news_runner(client),
+                        attacks=SECTION_5_6, repeats=repeats, out_root=root/'outputs/live_attacks')
+                finally:
+                    client.close()
+                with lock:
+                    state.update(attack_replay={'rows': rows, 'repeats': repeats, 'output': str(folder)},
+                                 message='Fake-news replay complete. Results are in Replay Lab.')
             elif action == 'archive-replay':
                 from dashboard.archive import replay_saved_forecasts
                 from market_data.live import target_quote
@@ -274,20 +290,39 @@ def create_server(port=8765, *, root=ROOT, bind=True):
                         credentials.set_key(key)
                     return self.respond(200,{'gemini':credentials.public_status()})
             action = self.path.removeprefix('/api/')
-            if action not in {'collect','forecast','paper','replay','debate','real-replay','archive-replay'} or self.path != '/api/'+action:
+            if action not in {'collect','forecast','paper','replay','debate','real-replay','archive-replay','fake-news-replay'} or self.path != '/api/'+action:
                 return self.respond(404,{'error':'Unknown action'})
+            repeats = None
+            if action == 'fake-news-replay':
+                try:
+                    length = int(self.headers.get('Content-Length', '0'))
+                    if not 1 <= length <= 256 or self.headers.get('Transfer-Encoding'):
+                        raise ValueError('Invalid request size')
+                    self.connection.settimeout(5)
+                    request = json.loads(self.rfile.read(length))
+                    repeats = request['repeats']
+                    if type(repeats) is not int or not 1 <= repeats <= 100:
+                        raise ValueError('Invalid repeats')
+                except (KeyError, TypeError, ValueError, OSError):
+                    return self.respond(400,{'error':'Enter 1 to 100 repeats per scenario'})
             with lock:
                 if state['busy']:
                     return self.respond(409,{'error':'An action is already running'})
                 if action in {'paper','debate'} and state['forecast'] is None:
                     return self.respond(400,{'error':'Run a fresh forecast first'})
+                if action == 'fake-news-replay':
+                    if not credentials.public_status()['configured']:
+                        return self.respond(400,{'error':'Connect Gemini before running the fake-news replay'})
+                    if not (state['forecast'] or {}).get('news_capture'):
+                        return self.respond(400,{'error':'Generate a forecast with archived News articles first'})
+                    state['attack_replay'] = None
                 if action == 'forecast':
                     activity.begin()
                     state.update(forecast=None,debate=None)
                 elif action == 'collect':
                     activity.reset()
                 state.update(busy=True,message=action.capitalize()+' running…')
-            threading.Thread(target=work,args=(action,),daemon=True).start()
+            threading.Thread(target=work,args=(action,repeats),daemon=True).start()
             self.respond(202,{'accepted':True})
     return ThreadingHTTPServer(('127.0.0.1',port),Handler,bind_and_activate=bind)
 

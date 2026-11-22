@@ -52,6 +52,21 @@
 <div class="bottom-grid section"><section class="panel" id="connections"><div class="section-head compact-head"><div><div class="eyebrow">DATA HEALTH</div><h2>Connected sources</h2></div><span class="label" id="source-summary">NOT COLLECTED</span></div><div id="sources" class="source-list"><div class="empty-inline">Source freshness and collection status appear here.</div></div><div class="panel-note"><svg><use href="#i-clock"/></svg><span>Daily sources retain their publication dates. Macro values carry across weekends; forward fill does not create new information.</span></div></section><section class="panel decision-panel"><div class="section-head compact-head"><div><div class="eyebrow">PAPER EXECUTION</div><h2>Paper decision & risk controls</h2></div><span class="label green-label" id="risk-label">PAPER ONLY</span></div><div class="decision-hero"><span class="decision-icon"><svg><use href="#i-shield"/></svg></span><div><strong id="decision-action">Ready when you are</strong><span id="decision-reason">Generate a forecast, then record a guarded paper decision.</span></div></div><div class="risk-checks"><div><span>Position limit</span><strong>25% of equity</strong></div><div><span>Circuit breaker</span><strong id="breaker-state">Not configured</strong></div><div><span>Execution costs</span><strong>0.10% fee + 5 bps slip</strong></div><div><span>Displayed forecast: 20% agent influence cap</span><strong id="cap-state">Requires ≥ 5 active</strong></div></div><details class="audit-details"><summary>Inspect paper ledger & decision</summary><pre id="decision">No recorded decision yet.</pre></details><details class="audit-details"><summary>Forecast contract, weights & Gemini debate</summary><pre id="contract">Generate a forecast to inspect its event definition.</pre></details></section></div>
 <section class="panel section research-panel" id="research"><div class="section-head"><div><div class="eyebrow">REPLAY LAB</div><h2>See the decisions. Reveal the outcomes.</h2><p>Compare completed historical forecasts without waiting for tomorrow.</p></div><div class="replay-actions"><button class="button small" data-action="archive-replay">Settle saved live forecasts</button><button class="button small" data-action="real-replay"><svg><use href="#i-flask"/></svg> Replay real BTC history</button><button class="button small subtle" data-action="replay">Synthetic walkthrough</button></div></div><div id="replay-badge" class="replay-mode">NO REPLAY RUN YET <span>Real history uses available price agents. Synthetic runs are labelled separately.</span></div><div class="replay-chart-wrap"><canvas id="replay-chart" aria-label="Historical forecast method comparison"></canvas><div id="replay-empty" class="replay-empty">Your method comparison will appear here</div></div><div class="replay-legend"><span><i class="method-dot exchange"></i>Agent Exchange</span><span><i class="method-dot average"></i>Simple average</span><span><i class="method-dot vote"></i>Majority vote</span><span class="mini-muted">Probability of up · completed days</span></div><div id="replay-results" class="replay-results"></div>
 <details class="audit-details research-details" open>
+  <summary>Fake-news replay</summary>
+  <p id="fake-news-replay-status">Generate a live forecast with archived News articles and connect Gemini.</p>
+  <label for="fake-news-repeats">Repeats per scenario</label>
+  <input id="fake-news-repeats" type="number" min="1" max="100" step="1" value="1" required>
+  <button class="button small" data-action="fake-news-replay" disabled>Run four test scenarios</button>
+  <p id="fake-news-calls">8 Gemini calls across four scenarios.</p>
+  <div id="fake-news-results" class="table-scroll" hidden>
+    <table class="agent-table">
+      <thead><tr><th>Scenario</th><th>Forecast</th><th>Comparable pairs</th><th>Mean absolute shift</th></tr></thead>
+      <tbody id="fake-news-rows"></tbody>
+    </table>
+    <p id="fake-news-output"></p>
+  </div>
+</details>
+<details class="audit-details research-details" open>
   <summary>Agent coins &amp; influence</summary>
   <h3>Live ledger</h3>
   <p id="live-coin-status">Live balances are available in the dashboard.</p>
