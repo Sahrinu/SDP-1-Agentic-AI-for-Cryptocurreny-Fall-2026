@@ -30,6 +30,9 @@ import pandas as pd
 
 NAMES = {"exchange": "Agent Exchange", "vote": "Majority vote",
          "average": "Simple average", "debate": "Debate (Bull/Bear/Judge)"}
+# Section 3.2.7 metrics written by experiments/trading_metrics.py into paper/baseline summaries.
+TRADING_COLUMNS = [("sharpe_annualised", "paper_sharpe"), ("max_drawdown_pct", "paper_max_drawdown_pct"),
+                   ("turnover", "paper_turnover"), ("fees_paid_usd", "paper_fees_usd")]
 
 
 def _num(value, digits=4):
@@ -84,6 +87,9 @@ def build(run_dir, *, baselines_dir=None, price_in=None, price_out=None, live_le
             for scenario in sorted(paper["scenario"].unique()):
                 match = paper[(paper["method"] == method) & (paper["scenario"] == scenario)]
                 row[f"paper_return_pct_{scenario}"] = _num(match["return_pct"].iloc[0], 3) if len(match) else None
+                for column, label in TRADING_COLUMNS:
+                    if column in paper and len(match):
+                        row[f"{label}_{scenario}"] = _num(match[column].iloc[0], 3)
 
         # model cost: only the debate makes model calls inside the replay runner
         if method == "debate" and usage:
@@ -110,6 +116,8 @@ def build(run_dir, *, baselines_dir=None, price_in=None, price_out=None, live_le
         for line in base.to_dict(orient="records"):
             rows.append({"method": labels.get(line["method"], line["method"]),
                          "paper_return_pct_clean": _num(line.get("return_pct"), 3),
+                         **{f"{label}_clean": _num(line.get(column), 3)
+                            for column, label in TRADING_COLUMNS if column in line},
                          "model_calls_per_decision": 0, "tokens_per_decision": 0})
 
     table = pd.DataFrame(rows)

@@ -6,6 +6,7 @@ from pathlib import Path
 import random
 import pandas as pd
 from execution.paper_trading import PaperTrader
+from experiments.trading_metrics import trading_metrics
 from risk.gateway import execute_guarded
 from risk.durable_gateway import RiskGateway, RiskPolicy
 
@@ -97,7 +98,8 @@ def trading_baselines(prices, *, start,end,output,execution='next_open', capped=
         pd.DataFrame(risk_rows).to_csv(folder/'risk_decisions.csv',index=False)
         if gateway is not None:gateway.close()
         pd.DataFrame(curve).to_csv(folder/'equity.csv',index=False)
-        summaries.append({'method':name,'capped':capped,**curve[-1]})
+        summaries.append({'method':name,'capped':capped,**curve[-1],
+                          **trading_metrics(curve,account.trades,account.initial_cash)})
     out.mkdir(parents=True,exist_ok=True)
     (out/'run.json').write_text(json.dumps({'execution':execution,'cap':.25 if capped else None,
         'fee':.001,'slippage_bps':5,'timing':'D close signal, D+1 execution',

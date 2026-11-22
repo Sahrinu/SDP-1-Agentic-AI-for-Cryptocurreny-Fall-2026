@@ -16,6 +16,7 @@ from risk.gateway import execute_guarded
 from risk.durable_gateway import RiskGateway, RiskPolicy
 from risk.circuit_breaker import constrained_action
 from execution.paper_trading import PaperTrader
+from experiments.trading_metrics import trading_metrics
 
 METHODS = ("exchange", "vote", "average")
 
@@ -186,7 +187,8 @@ def replay_portfolios(prices, forecasts, attacks, output, *, policy=None, synthe
             pd.DataFrame(equity_rows).to_csv(folder / "equity.csv", index=False)
             summaries.append({"scenario": scenario, "method": method,
                               "missing_forecast_days": sum(not x["forecast_available"] for x in decisions),
-                              **trader.summary(str(prices.loc[final, "close"]))})
+                              **trader.summary(str(prices.loc[final, "close"])),
+                              **trading_metrics(equity_rows, trader.trades, policy.initial_cash)})
     pd.DataFrame(summaries).to_csv(out / "summary.csv", index=False)
     (out / "run.json").write_text(json.dumps({
         "synthetic": synthetic, "policy": policy.__dict__,

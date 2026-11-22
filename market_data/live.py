@@ -363,9 +363,22 @@ def collect_snapshot(directory, *, input_directory=None):
         from market_data.etf import import_flows
         if input_directory is None:
             raise ValueError('Reviewed ETF input not supplied')
-        frame = import_flows(Path(input_directory)/'etf_flows.csv',directory/'etf_flows.csv')
+        source = Path(input_directory)/'etf_flows.csv'
+        from market_data import etf_sosovalue
+        key = etf_sosovalue.api_key(Path(input_directory).resolve().parent/'.env')
+        if key:
+            # Keep the file current from SoSoValue (last ~month on the free key);
+            # older reviewed rows are kept. A failed refresh falls back to the file.
+            try:
+                etf_sosovalue.update_csv(source, key, get=lambda url, headers: get_json(url, timeout=30, headers=headers))
+                etf_info['etf_refresh'] = 'sosovalue'
+            except Exception as exc:
+                etf_info['etf_refresh'] = f'failed: {type(exc).__name__}; using saved file'
+        frame = import_flows(source,directory/'etf_flows.csv')
         return frame.set_index('date')
+    etf_info = {}
     value = attempt('etf_flows',etf)
+    statuses['etf_flows'].update(etf_info)
     if value is not None:
         data['etf_flows'] = value
     statuses['betting_odds'] = {'status':'unavailable',
