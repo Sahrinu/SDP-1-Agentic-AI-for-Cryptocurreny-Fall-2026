@@ -313,6 +313,23 @@ whose News agent abstains on either arm is recorded as not comparable. Daily
 routine until the report: open the dashboard, **Refresh market data** (settles due
 forecasts), **Generate 24h forecast**, then run the command above.
 
+**Comparing model providers.** To check that the result does not depend on one
+model, the same saved forecast can be re-run with the News agent on Claude or
+OpenAI instead of Gemini (keys in `ANTHROPIC_API_KEY` / `OPENAI_API_KEY`, models
+via `CLAUDE_MODEL` / `OPENAI_MODEL`; no extra packages):
+
+```bash
+python -m experiments.live_attack outputs/dashboard/forecasts/<id>.json --attack all --repeats 2 --provider claude
+python -m experiments.live_attack outputs/dashboard/forecasts/<id>.json --attack all --repeats 2 --provider openai
+python -m experiments.model_comparison
+```
+
+`model_comparison` writes `outputs/model_comparison/model_comparison.md` with, per
+provider: usable answers, the News agent's mean clean probability, direction
+agreement with Gemini on the same forecasts, News and team shifts under attack,
+and tokens per call (add `--price provider=in,out` for US dollars). It compares
+robustness and cost, not accuracy: a few settled forecasts cannot rank providers.
+
 Cost-matched trading baselines have their own command:
 
 ```bash

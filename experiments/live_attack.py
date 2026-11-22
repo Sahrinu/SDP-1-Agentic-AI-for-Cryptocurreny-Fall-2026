@@ -19,7 +19,13 @@ Usage (Gemini key in GOOGLE_API_KEY / GEMINI_API_KEY or .env):
   python -m experiments.live_attack --latest --attack all --repeats 2
   python -m experiments.live_attack outputs/dashboard/forecasts/<id>.json --attack bearish_claim --debate
 
-Each pair costs 2 Gemini calls (News clean + attacked); --debate adds 6 more.
+Other providers (supervisor request: compare model APIs on the same inputs):
+  python -m experiments.live_attack <forecast.json> --attack all --repeats 2 --provider claude
+  python -m experiments.live_attack <forecast.json> --attack all --repeats 2 --provider openai
+  (keys in ANTHROPIC_API_KEY / OPENAI_API_KEY; models via CLAUDE_MODEL / OPENAI_MODEL)
+Then summarise all providers with: python -m experiments.model_comparison
+
+Each pair costs 2 model calls (News clean + attacked); --debate adds 6 more.
 Every run is appended to outputs/live_attacks/all_shifts.csv for the final table.
 """
 import argparse
@@ -154,7 +160,7 @@ def debate_snapshot(forecast, probabilities, news_name, news_evidence):
 # ---------- the experiment ----------
 
 def run(forecast_path, ask_news, *, attacks=("bearish_claim",), repeats=2,
-        out_root=ROOT / "outputs/live_attacks", debate_client=None):
+        out_root=ROOT / "outputs/live_attacks", debate_client=None, model_info=None):
     from experiments.news_robustness import ATTACKS, make_attack
 
     if type(repeats) is not int or not 1 <= repeats <= 10:
@@ -176,7 +182,8 @@ def run(forecast_path, ask_news, *, attacks=("bearish_claim",), repeats=2,
     clean_view = news_view(forecast, articles, observed_at)
     methods = METHODS + (["debate"] if debate_client is not None else [])
 
-    run_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ") + "-" + uuid.uuid4().hex[:6]
+    provider = (model_info or {}).get("provider", "gemini")
+    run_id = (provider + "-" + datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ") + "-" + uuid.uuid4().hex[:6])
     folder = Path(out_root) / (str(forecast["id"])[:12] + "-" + run_id)
     folder.mkdir(parents=True, exist_ok=False)
     rows, details = [], []
@@ -234,7 +241,9 @@ def run(forecast_path, ask_news, *, attacks=("bearish_claim",), repeats=2,
         "coins_used": coins, "news_agent": news_name, "attacks": list(attacks), "repeats": repeats,
         "scope": "Saved live forecast; only the News agent re-asked; other agents fixed; Contrarian recomputed.",
         "pairs": details, "summary": summary,
-        "model_usage": getattr(debate_client, "usage", None)}, indent=2, default=str), encoding="utf-8")
+        "provider": provider, "model": (model_info or {}).get("model"),
+        "model_usage": (model_info or {}).get("usage", getattr(debate_client, "usage", None))},
+        indent=2, default=str), encoding="utf-8")
     _write_csv(folder / "shifts.csv", rows, append=False)
     _write_csv(Path(out_root) / "all_shifts.csv", rows, append=True)
     return rows, summary, folder
@@ -257,21 +266,24 @@ def main():
     parser.add_argument("--latest", action="store_true", help="Use the newest saved live forecast")
     parser.add_argument("--attack", choices=[*ATTACKS, "all"], default="bearish_claim")
     parser.add_argument("--repeats", type=int, default=2)
-    parser.add_argument("--debate", action="store_true", help="Also compare the debate (6 more Gemini calls per pair)")
+    parser.add_argument("--debate", action="store_true", help="Also compare the debate (6 more model calls per pair)")
+    parser.add_argument("--provider", choices=["gemini", "claude", "openai"], default="gemini",
+                        help="Model used by the re-asked News agent (and debate)")
     parser.add_argument("--env-file", type=Path, default=ROOT / ".env")
     args = parser.parse_args()
     if not args.forecast and not args.latest:
         parser.error("Give a forecast file or --latest")
     from dotenv import load_dotenv
     load_dotenv(args.env_file, override=False)
-    from model_clients.demo_gemini import DemoGemini
-    client = DemoGemini()
+    from model_clients.demo_providers import make_client
+    client = make_client(args.provider)
     try:
         path = latest_forecast() if args.latest else Path(args.forecast)
         attacks = tuple(ATTACKS) if args.attack == "all" else (args.attack,)
         rows, summary, folder = run(path, gemini_news_runner(client), attacks=attacks,
-                                    repeats=args.repeats, debate_client=client if args.debate else None)
-        print(f"Forecast {path.name}: {len(attacks)} attack(s) x {args.repeats} repeat(s)")
+                                    repeats=args.repeats, debate_client=client if args.debate else None,
+                                    model_info={"provider": args.provider, "model": client.model, "usage": client.usage})
+        print(f"Forecast {path.name} with {args.provider} ({client.model}): {len(attacks)} attack(s) x {args.repeats} repeat(s)")
         for line in summary:
             mean = "—" if line["mean_shift"] is None else f"{line['mean_shift']:.4f}"
             print(f"  {line['method']:9s} mean shift {mean}  ({line['comparable_pairs']}/{line['pairs']} comparable)")
