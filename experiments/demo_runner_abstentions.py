@@ -49,10 +49,10 @@ def main():
                 target_time=close_times[f'2026-11-{d+1:02d}'])} for d in (7, 8)}
         print('SYNTHETIC DEMO: all agent responses and prices are fabricated test inputs.')
         runner.run('2026-11-07', '2026-11-08', 2, root / 'data', root / 'agents', out,
-                   student2_adapters={'News Specialist': SyntheticAdapter('news'),
+                   specialist_adapters={'News Specialist': SyntheticAdapter('news'),
                                       'Mood Specialist': SyntheticAdapter('mood'),
                                       'Betting Odds Specialist': SyntheticAdapter('betting_odds')},
-                   student2_inputs=days, settlement_contract=dict(common, close_times=close_times))
+                   specialist_inputs=days, settlement_contract=dict(common, close_times=close_times))
         (out / 'DEMO_METADATA.json').write_text(json.dumps({
             'mode': 'synthetic_offline', 'real_specialists_executed': False,
             'model_or_network_calls': False,

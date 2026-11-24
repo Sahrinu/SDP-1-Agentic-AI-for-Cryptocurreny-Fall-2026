@@ -7,7 +7,7 @@ import unittest
 from datetime import datetime
 from pathlib import Path
 
-from student2.agents.binance_raw_context import assemble
+from market_data.prediction_markets.binance_raw_context import assemble
 
 ROOT = Path(__file__).resolve().parents[1]
 COLLECTOR = ROOT / 'verification' / 'collect_binance_context.ps1'

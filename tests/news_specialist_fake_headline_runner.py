@@ -9,8 +9,8 @@ from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
-from student2.agents import news_specialist as news_specialist_module
-from student2.agents.news_specialist import run_news_specialist
+from agents.specialists import news_specialist as news_specialist_module
+from agents.specialists.news_specialist import run_news_specialist
 
 ORIGINAL_BUILD_GEMINI_PROMPT = news_specialist_module.build_gemini_prompt
 

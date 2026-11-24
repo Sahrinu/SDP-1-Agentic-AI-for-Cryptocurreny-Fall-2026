@@ -10,10 +10,15 @@ outputs/
 build/
 dist/
 
-# Student 5 downloaded market data and raw provider responses
+# Local downloads and raw provider responses
 /data/macro.csv
 /data/macro_raw/
 /data/stablecoin.csv
 /data/borrowing.csv
 /data/borrowing_raw/
-# data/etf_flows.csv is tracked: reviewed Farside totals cannot be fetched automatically.
+# ETF history is tracked; SoSoValue refreshes recent flows while reviewed older rows remain.
+
+# Local OS and editor artifacts
+.DS_Store
+Thumbs.db
+*.swp

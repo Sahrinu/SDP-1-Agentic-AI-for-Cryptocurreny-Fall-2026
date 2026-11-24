@@ -10,7 +10,7 @@ _BEDROCK_CLASS = None
 
 
 def _bedrock_class():
-    """Lazily import langchain-aws (the optional ``[bedrock]`` extra) and return a
+    """Lazily import langchain-aws (the optional ``[bedrock-client]`` extra) and return a
     ChatBedrockConverse subclass with normalized content output.
 
     Imported on demand so the optional dependency (and boto3) isn't required by
@@ -25,7 +25,7 @@ def _bedrock_class():
     except ImportError as exc:
         raise ImportError(
             "AWS Bedrock support requires the optional 'langchain-aws' dependency. "
-            'Install it with: pip install "tradingagents[bedrock]"'
+            'Install it with: pip install "bitcoin-agent-exchange[bedrock-client]"'
         ) from exc
 
     class NormalizedChatBedrockConverse(ChatBedrockConverse):

@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from student2.agents.news_specialist import filter_articles_for_prediction
+from agents.specialists.news_specialist import filter_articles_for_prediction
 
 from tests import news_specialist_fake_headline_runner as experiment_runner
 from tests.news_specialist_fake_headline_runner import build_experiment_prompt, generate_fixtures, _run_pair

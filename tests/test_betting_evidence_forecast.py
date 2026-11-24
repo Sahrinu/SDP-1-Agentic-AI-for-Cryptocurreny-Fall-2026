@@ -9,15 +9,15 @@ from unittest.mock import patch
 import pytest
 import pandas as pd
 
-from student2.agents import market_evidence_specialist as evidence
-from student2.agents import market_evidence_with_prices as enriched
-from student2.agents import threshold_market_evidence as threshold
-from student2.integration_adapter import Student2Adapter
+from agents.specialists import market_evidence_specialist as evidence
+from agents.specialists import market_evidence_with_prices as enriched
+from market_data.prediction_markets import threshold_market_evidence as threshold
+from agents.adapters import SpecialistAdapter
 from tests.test_market_evidence_specialist import PRED, TARGET, observation, response
 from tests.test_market_price_context import PRED as PRICE_PRED, context, observation as price_observation
 from tests.test_runner_abstentions import runner
 from tests.test_limitless_live_reader import frame, market, contract as strict_contract, NOW
-from student2.agents import limitless_live as live
+from market_data.prediction_markets import limitless_live as live
 
 
 def contract():
@@ -69,7 +69,7 @@ def test_mismatched_valid_market_produces_independent_mock_estimate():
     def model(prompt):
         prompts.append(prompt)
         return {**response(),'explanation':'Assumption: short-term direction persists with uncertainty.'}
-    result=Student2Adapter('betting_odds',model_client=model).forecast(PRED.date().isoformat(),inputs())
+    result=SpecialistAdapter('betting_odds',model_client=model).forecast(PRED.date().isoformat(),inputs())
     assert result['p_up']==pytest.approx(.52)
     assert result['p_up']!=observation()['quote']['yes_payout_midpoint']
     assert result['data_status']=='sufficient_data'
@@ -87,7 +87,7 @@ def test_mismatched_valid_market_produces_independent_mock_estimate():
     response,
 ])
 def test_adapter_accepts_valid_json_text_and_object(payload):
-    result = Student2Adapter('betting_odds', model_client=lambda _: payload()).forecast(
+    result = SpecialistAdapter('betting_odds', model_client=lambda _: payload()).forecast(
         PRED.date().isoformat(), inputs())
     assert result['data_status'] == 'sufficient_data'
     assert result['p_up'] == pytest.approx(.52)
@@ -96,7 +96,7 @@ def test_adapter_accepts_valid_json_text_and_object(payload):
 
 @pytest.mark.parametrize('payload', ['{broken', '[]', 'null', json.dumps({'probability_up': 0.9})])
 def test_adapter_rejects_malformed_or_schema_invalid_json_without_probability(payload):
-    result = Student2Adapter('betting_odds', model_client=lambda _: payload).forecast(
+    result = SpecialistAdapter('betting_odds', model_client=lambda _: payload).forecast(
         PRED.date().isoformat(), inputs())
     assert result['data_status'] == 'insufficient_data'
     assert result['p_up'] is None
@@ -115,7 +115,7 @@ def test_price_context_keeps_dashboard_target_and_validates_before_model():
     def model(prompt):
         calls.append(prompt)
         return json.dumps(response())
-    adapter = Student2Adapter('betting_odds', model_client=model)
+    adapter = SpecialistAdapter('betting_odds', model_client=model)
     result = adapter.forecast(PRICE_PRED.date().isoformat(), data)
     assert result['data_status'] == 'sufficient_data'
     assert result['reference_price_definition'] == definition
@@ -138,7 +138,7 @@ def test_price_context_rejects_malformed_model_json(payload):
             'student2_market_observation': price_observation(),
             'student2_markets_observed_at': PRICE_PRED,
             'student2_price_context': context()}
-    result = Student2Adapter('betting_odds', model_client=lambda _: payload).forecast(
+    result = SpecialistAdapter('betting_odds', model_client=lambda _: payload).forecast(
         PRICE_PRED.date().isoformat(), data)
     assert result['data_status'] == 'insufficient_data'
     assert result['p_up'] is None
@@ -173,7 +173,7 @@ def test_invalid_book_does_not_call_model():
         if mutation=='oracle':obs['market']['priceOracleMetadata']={'ticker':'ETHUSDT'}
         if mutation=='chart':obs['market']['metadata']={'chart':{'source':'other'}}
         if mutation=='created_after':obs['market']['createdAt']=(PRED+timedelta(seconds=1)).isoformat()
-        result=Student2Adapter('betting_odds',model_client=lambda p:calls.append(p)).forecast(PRED.date().isoformat(),data)
+        result=SpecialistAdapter('betting_odds',model_client=lambda p:calls.append(p)).forecast(PRED.date().isoformat(),data)
         assert result['p_up'] is None
         assert result['data_status']=='insufficient_data'
         assert calls==[]
@@ -181,10 +181,10 @@ def test_invalid_book_does_not_call_model():
 
 def test_book_and_injected_callable_required_no_network():
     data=inputs()
-    assert Student2Adapter('betting_odds').forecast(PRED.date().isoformat(),data)['p_up'] is None
+    assert SpecialistAdapter('betting_odds').forecast(PRED.date().isoformat(),data)['p_up'] is None
     data.pop('student2_market_observation')
     calls=[]
-    assert Student2Adapter('betting_odds',lambda p:calls.append(p)).forecast(PRED.date().isoformat(),data)['p_up'] is None
+    assert SpecialistAdapter('betting_odds',lambda p:calls.append(p)).forecast(PRED.date().isoformat(),data)['p_up'] is None
     assert calls==[]
 
 
@@ -193,7 +193,7 @@ def test_runner_uses_repaired_adapter_only_after_matching_settlement():
     def model(prompt):
         calls.append(prompt)
         return response()
-    adapter=Student2Adapter('betting_odds',model_client=model)
+    adapter=SpecialistAdapter('betting_odds',model_client=model)
     c=data['student2_forecast']
     settlement={k:c[k] for k in ('price_source','reference_price_definition','tie_definition')}
     settlement['close_times']={str(PRED.date()):PRED.isoformat(),str(TARGET.date()):TARGET.isoformat()}
@@ -202,13 +202,13 @@ def test_runner_uses_repaired_adapter_only_after_matching_settlement():
         pd.DataFrame({'date':[str(PRED.date()),str(TARGET.date())],'close':[100,110]}).to_csv(root/'data/btc_prices.csv',index=False)
         with patch.object(runner,'load_agents',return_value={}):
             forecasts,_,_,summary=runner.run(str(PRED.date()),str(TARGET.date()),0,root/'data',root/'agents',root/'output',
-                student2_adapters={'Betting Odds Specialist':adapter},
-                student2_inputs={str(PRED.date()):data},settlement_contract=settlement)
+                specialist_adapters={'Betting Odds Specialist':adapter},
+                specialist_inputs={str(PRED.date()):data},settlement_contract=settlement)
         assert forecasts.iloc[0]['p_Betting Odds Specialist']==pytest.approx(.52)
         assert forecasts.iloc[0]['average']==pytest.approx(.52)
         assert summary.set_index('method').loc['average','evaluated_days']==1
     assert len(calls)==1
-    error=runner.student2_window_error(pd.Timestamp(PRED.date()),pd.Timestamp(TARGET.date()),data,{})
+    error=runner.specialist_window_error(pd.Timestamp(PRED.date()),pd.Timestamp(TARGET.date()),data,{})
     forecasts,abstentions=runner.evaluate_agents({'Betting Odds Specialist':adapter},{'Betting Odds Specialist'},
                                                   pd.Timestamp(PRED.date()),data,error)
     assert not forecasts and 'Betting Odds Specialist' in abstentions
@@ -217,7 +217,7 @@ def test_runner_uses_repaired_adapter_only_after_matching_settlement():
 
 def test_runner_abstains_for_invalid_book_without_calling_model():
     data=inputs();data['student2_market_observation']['quote']['yes_payout_midpoint']=.99
-    calls=[];adapter=Student2Adapter('betting_odds',model_client=lambda p:calls.append(p))
+    calls=[];adapter=SpecialistAdapter('betting_odds',model_client=lambda p:calls.append(p))
     forecasts,abstentions=runner.evaluate_agents({'Betting Odds Specialist':adapter},{'Betting Odds Specialist'},
                                                   pd.Timestamp(PRED.date()),data,None)
     assert not forecasts and 'Betting Odds Specialist' in abstentions
@@ -226,7 +226,7 @@ def test_runner_abstains_for_invalid_book_without_calling_model():
 
 def test_midpoint_equal_model_output_is_allowed_with_valid_explanation():
     midpoint=observation()['quote']['yes_payout_midpoint']
-    result=Student2Adapter('betting_odds',lambda p:{**response(),'probability_up':midpoint}).forecast(PRED.date().isoformat(),inputs())
+    result=SpecialistAdapter('betting_odds',lambda p:{**response(),'probability_up':midpoint}).forecast(PRED.date().isoformat(),inputs())
     assert result['p_up'] == pytest.approx(midpoint)
     assert result['data_status'] == 'sufficient_data'
     assert response()['target_analysis'] in result['evidence'][0]
@@ -280,7 +280,7 @@ def test_required_explanation_sections_reject_missing_or_blank(field,invalid):
     payload=response()
     if invalid is None:del payload[field]
     else:payload[field]=invalid
-    result=Student2Adapter('betting_odds',lambda p:payload).forecast(PRED.date().isoformat(),inputs())
+    result=SpecialistAdapter('betting_odds',lambda p:payload).forecast(PRED.date().isoformat(),inputs())
     assert result['p_up'] is None
     assert result['data_status']=='insufficient_data'
     features=enriched.prepare(price_observation(),context(),PRICE_PRED)

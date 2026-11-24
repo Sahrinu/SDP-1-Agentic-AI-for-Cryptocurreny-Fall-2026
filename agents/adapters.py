@@ -3,6 +3,7 @@
 The root experiment preserves unavailable results as abstentions. The adapter
 never supplies a model or fetches a market itself.
 """
+
 from __future__ import annotations
 
 from collections.abc import Mapping
@@ -14,9 +15,18 @@ from langchain_core.messages import HumanMessage
 from agents.specialists.mood_specialist import run_mood_specialist
 from agents.specialists.news_specialist import run_news_specialist
 
-
-_NAMES = {"news": "News Specialist", "mood": "Mood Specialist", "betting_odds": "Betting Odds Specialist"}
-_FIELDS = ("prediction_time", "target_time", "price_source", "reference_price_definition", "tie_definition")
+_NAMES = {
+    "news": "News Specialist",
+    "mood": "Mood Specialist",
+    "betting_odds": "Betting Odds Specialist",
+}
+_FIELDS = (
+    "prediction_time",
+    "target_time",
+    "price_source",
+    "reference_price_definition",
+    "tie_definition",
+)
 
 
 def _timestamp(value: Any) -> datetime:
@@ -51,7 +61,11 @@ def _contract(day: str, data: Mapping[str, Any]) -> tuple[dict[str, Any] | None,
     value = data.get("student2_forecast")
     if not isinstance(value, Mapping):
         return None, ["Missing explicit student2_forecast configuration."]
-    missing = [field for field in _FIELDS if not isinstance(value.get(field), (str, datetime)) or not str(value.get(field)).strip()]
+    missing = [
+        field
+        for field in _FIELDS
+        if not isinstance(value.get(field), (str, datetime)) or not str(value.get(field)).strip()
+    ]
     if missing:
         return None, ["Missing forecast configuration: " + ", ".join(missing)]
     try:
@@ -64,7 +78,7 @@ def _contract(day: str, data: Mapping[str, Any]) -> tuple[dict[str, Any] | None,
     if prediction.date() != expected_day:
         errors.append("Forecast day must equal the prediction timestamp's UTC date.")
     if target - prediction != timedelta(hours=24):
-        errors.append("Student 2 specialists require an explicit 24-hour forecast window.")
+        errors.append("Specialists require an explicit 24-hour forecast window.")
     if value["tie_definition"] != "down":
         errors.append("The strict-higher event requires tie_definition 'down'.")
     for field in ("price_source", "reference_price_definition"):
@@ -72,10 +86,13 @@ def _contract(day: str, data: Mapping[str, Any]) -> tuple[dict[str, Any] | None,
             errors.append(f"{field} must be a nonempty string.")
     if errors:
         return None, errors
-    return {"prediction_time": prediction, "target_time": target,
-            "price_source": value["price_source"],
-            "reference_price_definition": value["reference_price_definition"],
-            "tie_definition": value["tie_definition"]}, []
+    return {
+        "prediction_time": prediction,
+        "target_time": target,
+        "price_source": value["price_source"],
+        "reference_price_definition": value["reference_price_definition"],
+        "tie_definition": value["tie_definition"],
+    }, []
 
 
 class _ContractBoundClient:
@@ -86,7 +103,9 @@ class _ContractBoundClient:
         self._contract = contract
 
     def with_structured_output(self, *args: Any, **kwargs: Any) -> "_ContractBoundClient":
-        return _ContractBoundClient(self._client.with_structured_output(*args, **kwargs), self._contract)
+        return _ContractBoundClient(
+            self._client.with_structured_output(*args, **kwargs), self._contract
+        )
 
     def invoke(self, messages: list[Any], **kwargs: Any) -> Any:
         if not messages or not isinstance(messages[0].content, str):
@@ -99,10 +118,12 @@ class _ContractBoundClient:
             f"price_source={c['price_source']}; reference_price_definition={c['reference_price_definition']}; "
             f"tie_definition={c['tie_definition']}.\n\n"
         )
-        return self._client.invoke([HumanMessage(content=definition + messages[0].content), *messages[1:]], **kwargs)
+        return self._client.invoke(
+            [HumanMessage(content=definition + messages[0].content), *messages[1:]], **kwargs
+        )
 
 
-class Student2Adapter:
+class SpecialistAdapter:
     """Expose one specialist in the team result shape without a 0.5 fallback.
 
     ``data`` must contain ``student2_forecast`` with all five contract fields.
@@ -120,72 +141,151 @@ class Student2Adapter:
 
     def __init__(self, kind: str, model_client: Any | None = None):
         if kind not in _NAMES:
-            raise ValueError(f"Unknown Student 2 specialist: {kind!r}")
+            raise ValueError(f"Unknown specialist: {kind!r}")
         self.kind = kind
         self.model_client = model_client
         self.AGENT_NAME = _NAMES[kind]
 
     def _missing(self, day: str, reasons: list[str]) -> dict[str, Any]:
-        return {"agent": self.AGENT_NAME, "day": str(day), "p_up": None,
-                "evidence": list(reasons), "data_missing": True,
-                "data_status": "insufficient_data", "limitations": list(reasons)}
+        return {
+            "agent": self.AGENT_NAME,
+            "day": str(day),
+            "p_up": None,
+            "evidence": list(reasons),
+            "data_missing": True,
+            "data_status": "insufficient_data",
+            "limitations": list(reasons),
+        }
 
-    def _betting_forecast(self, day: str, data: Mapping[str, Any], contract: Mapping[str, Any]) -> dict[str, Any]:
+    def _betting_forecast(
+        self, day: str, data: Mapping[str, Any], contract: Mapping[str, Any]
+    ) -> dict[str, Any]:
         from agents.specialists import market_evidence_specialist as evidence
-        prediction, target = contract['prediction_time'], contract['target_time']
+
+        prediction, target = contract["prediction_time"], contract["target_time"]
         try:
-            observed = _timestamp(data.get('student2_markets_observed_at'))
+            observed = _timestamp(data.get("student2_markets_observed_at"))
         except (ValueError, TypeError, OverflowError):
-            return self._missing(day, ['Missing or invalid timezone-aware student2_markets_observed_at snapshot timestamp.'])
+            return self._missing(
+                day,
+                [
+                    "Missing or invalid timezone-aware student2_markets_observed_at snapshot timestamp."
+                ],
+            )
         if observed > prediction or observed > datetime.now(timezone.utc):
-            return self._missing(day, ['student2_markets_observed_at must not be after prediction_time or the current time.'])
-        observation = data.get('student2_market_observation')
+            return self._missing(
+                day,
+                [
+                    "student2_markets_observed_at must not be after prediction_time or the current time."
+                ],
+            )
+        observation = data.get("student2_market_observation")
         if not isinstance(observation, dict):
-            return self._missing(day, ['A saved student2_market_observation with a validated timestamped book is required.'])
+            return self._missing(
+                day,
+                [
+                    "A saved student2_market_observation with a validated timestamped book is required."
+                ],
+            )
         try:
-            received = _timestamp(observation['quote']['received_at'])
+            received = _timestamp(observation["quote"]["received_at"])
             if received > observed:
-                return self._missing(day, ['The book was received after the attested observation time.'])
+                return self._missing(
+                    day, ["The book was received after the attested observation time."]
+                )
         except (KeyError, TypeError, ValueError, OverflowError):
-            return self._missing(day, ['Missing or invalid book observation receipt timestamp.'])
+            return self._missing(day, ["Missing or invalid book observation receipt timestamp."])
         if (prediction - received).total_seconds() > 300:
-            return self._missing(day, ['The market book was older than five minutes at forecast time.'])
+            return self._missing(
+                day, ["The market book was older than five minutes at forecast time."]
+            )
         try:
-            if observation.get('provider') == 'kalshi' and 'btc_hourly' in data and '_reference_close' in data:
-                result = evidence.forecast_kalshi_with_context(observation, prediction, target,
-                    price_source=contract['price_source'],
-                    reference_price_definition=contract['reference_price_definition'],
-                    reference_price=data['_reference_close'], hourly_bars=data['btc_hourly'])
+            if (
+                observation.get("provider") == "kalshi"
+                and "btc_hourly" in data
+                and "_reference_close" in data
+            ):
+                result = evidence.forecast_kalshi_with_context(
+                    observation,
+                    prediction,
+                    target,
+                    price_source=contract["price_source"],
+                    reference_price_definition=contract["reference_price_definition"],
+                    reference_price=data["_reference_close"],
+                    hourly_bars=data["btc_hourly"],
+                )
             else:
-                if not callable(self.model_client) and not hasattr(self.model_client, 'with_structured_output'):
-                    return self._missing(day, ['No explicit Betting Odds model callable was supplied; no model call was attempted.'])
+                if not callable(self.model_client) and not hasattr(
+                    self.model_client, "with_structured_output"
+                ):
+                    return self._missing(
+                        day,
+                        [
+                            "No explicit Betting Odds model callable was supplied; no model call was attempted."
+                        ],
+                    )
                 model_call = self.model_client
-                if hasattr(self.model_client, 'with_structured_output'):
-                    structured = self.model_client.with_structured_output(evidence.ModelEstimate, method='json_schema')
+                if hasattr(self.model_client, "with_structured_output"):
+                    structured = self.model_client.with_structured_output(
+                        evidence.ModelEstimate, method="json_schema"
+                    )
                     model_call = lambda prompt: structured.invoke([HumanMessage(content=prompt)])
-                price_context = data.get('student2_price_context')
+                price_context = data.get("student2_price_context")
                 if price_context is None:
-                    result = evidence.forecast_from_market_evidence(observation,
-                        prediction_time=prediction,target_time=target,price_source=contract['price_source'],
-                        reference_price_definition=contract['reference_price_definition'],model_call=model_call)
+                    result = evidence.forecast_from_market_evidence(
+                        observation,
+                        prediction_time=prediction,
+                        target_time=target,
+                        price_source=contract["price_source"],
+                        reference_price_definition=contract["reference_price_definition"],
+                        model_call=model_call,
+                    )
                 else:
                     from agents.specialists import market_evidence_with_prices as enriched
-                    features = enriched.prepare(observation, price_context, prediction,
-                        target_time=target, price_source=contract['price_source'],
-                        reference_price_definition=contract['reference_price_definition'])
-                    result = enriched.evaluate(features,model_call)
-            if result.agent != evidence.NAME or _timestamp(result.prediction_time) != prediction or _timestamp(result.target_time) != target:
-                return self._missing(day, ['Specialist result identity or timestamps do not match the forecast contract.'])
+
+                    features = enriched.prepare(
+                        observation,
+                        price_context,
+                        prediction,
+                        target_time=target,
+                        price_source=contract["price_source"],
+                        reference_price_definition=contract["reference_price_definition"],
+                    )
+                    result = enriched.evaluate(features, model_call)
+            if (
+                result.agent != evidence.NAME
+                or _timestamp(result.prediction_time) != prediction
+                or _timestamp(result.target_time) != target
+            ):
+                return self._missing(
+                    day,
+                    [
+                        "Specialist result identity or timestamps do not match the forecast contract."
+                    ],
+                )
         except Exception as exc:
-            return self._missing(day, [f'Betting Odds evidence or model failed: {type(exc).__name__}.'])
-        missing = result.data_status != 'sufficient_data' or result.probability_up is None
-        return {'agent': self.AGENT_NAME, 'day': str(day), 'p_up': None if missing else result.probability_up,
-                'evidence': [result.explanation,*result.evidence_ids], 'data_missing': missing,
-                'data_status': result.data_status,
-                'limitations': [*result.limitations,'Snapshot availability and later revisions are caller-attested, not independently verified.'],
-                'observed_at': observed.isoformat(), 'prediction_time': prediction.isoformat(),
-                'target_time': target.isoformat(), 'price_source': contract['price_source'],
-                'reference_price_definition': contract['reference_price_definition'], 'tie_definition': contract['tie_definition']}
+            return self._missing(
+                day, [f"Betting Odds evidence or model failed: {type(exc).__name__}."]
+            )
+        missing = result.data_status != "sufficient_data" or result.probability_up is None
+        return {
+            "agent": self.AGENT_NAME,
+            "day": str(day),
+            "p_up": None if missing else result.probability_up,
+            "evidence": [result.explanation, *result.evidence_ids],
+            "data_missing": missing,
+            "data_status": result.data_status,
+            "limitations": [
+                *result.limitations,
+                "Snapshot availability and later revisions are caller-attested, not independently verified.",
+            ],
+            "observed_at": observed.isoformat(),
+            "prediction_time": prediction.isoformat(),
+            "target_time": target.isoformat(),
+            "price_source": contract["price_source"],
+            "reference_price_definition": contract["reference_price_definition"],
+            "tie_definition": contract["tie_definition"],
+        }
 
     def forecast(self, day: str, data: Mapping[str, Any]) -> dict[str, Any]:
         if not isinstance(data, Mapping):
@@ -194,15 +294,22 @@ class Student2Adapter:
         if errors or contract is None:
             return self._missing(day, errors)
         prediction, target = contract["prediction_time"], contract["target_time"]
-        if self.kind == 'betting_odds':
-            return self._betting_forecast(day,data,contract)
+        if self.kind == "betting_odds":
+            return self._betting_forecast(day, data, contract)
         if self.kind == "news" and data.get("fake_headline"):
-            return self._missing(day, ["Unsupported fake_headline: a headline alone does not provide a publication timestamp or article evidence."])
+            return self._missing(
+                day,
+                [
+                    "Unsupported fake_headline: a headline alone does not provide a publication timestamp or article evidence."
+                ],
+            )
         keys = {"news": "student2_news_articles", "mood": "student2_mood_readings"}
         key = keys[self.kind]
         inputs = data.get(key)
         if not isinstance(inputs, (list, tuple)) or not inputs:
-            return self._missing(day, [f"No explicit {key} supplied; no external fetch was attempted."])
+            return self._missing(
+                day, [f"No explicit {key} supplied; no external fetch was attempted."]
+            )
         if not all(isinstance(item, dict) for item in inputs):
             return self._missing(day, [f"{key} must contain only objects."])
         observed_keys = {"news": "student2_news_observed_at", "mood": "student2_mood_observed_at"}
@@ -210,11 +317,19 @@ class Student2Adapter:
         try:
             observed = _timestamp(data.get(observed_key))
         except (TypeError, ValueError, OverflowError):
-            return self._missing(day, [f"Missing or invalid timezone-aware {observed_key} snapshot timestamp."])
+            return self._missing(
+                day, [f"Missing or invalid timezone-aware {observed_key} snapshot timestamp."]
+            )
         if observed > prediction or observed > datetime.now(timezone.utc):
-            return self._missing(day, [f"{observed_key} must not be after prediction_time or the current time."])
+            return self._missing(
+                day, [f"{observed_key} must not be after prediction_time or the current time."]
+            )
         if self.kind in ("news", "mood"):
-            fields = ("publication_timestamp", "published_at", "timestamp") if self.kind == "news" else ("timestamp",)
+            fields = (
+                ("publication_timestamp", "published_at", "timestamp")
+                if self.kind == "news"
+                else ("timestamp",)
+            )
             if any(_is_naive_timestamp(item.get(field)) for item in inputs for field in fields):
                 return self._missing(day, [f"{key} contains a timezone-naive evidence timestamp."])
             for item in inputs:
@@ -224,37 +339,61 @@ class Student2Adapter:
                     except (TypeError, ValueError, OverflowError):
                         continue  # Leave unknown times for the specialist to exclude.
                     if evidence_time > observed:
-                        return self._missing(day, [f"{key} contains evidence dated after {observed_key}."])
+                        return self._missing(
+                            day, [f"{key} contains evidence dated after {observed_key}."]
+                        )
         if self.kind in ("news", "mood") and self.model_client is None:
-            return self._missing(day, ["No model client was supplied; no model call was attempted."])
+            return self._missing(
+                day, ["No model client was supplied; no model call was attempted."]
+            )
 
         try:
             if self.kind == "news":
-                result = run_news_specialist(inputs, prediction, target,
-                    model_client=_ContractBoundClient(self.model_client, contract))
+                result = run_news_specialist(
+                    inputs,
+                    prediction,
+                    target,
+                    model_client=_ContractBoundClient(self.model_client, contract),
+                )
             else:
-                result = run_mood_specialist(inputs, prediction, target,
-                    model_client=_ContractBoundClient(self.model_client, contract))
-            if _timestamp(result.prediction_time) != prediction or _timestamp(result.target_time) != target:
-                return self._missing(day, ["Specialist result timestamps do not match the explicit forecast contract."])
+                result = run_mood_specialist(
+                    inputs,
+                    prediction,
+                    target,
+                    model_client=_ContractBoundClient(self.model_client, contract),
+                )
+            if (
+                _timestamp(result.prediction_time) != prediction
+                or _timestamp(result.target_time) != target
+            ):
+                return self._missing(
+                    day,
+                    ["Specialist result timestamps do not match the explicit forecast contract."],
+                )
             if result.agent != self.AGENT_NAME:
-                return self._missing(day, ["Specialist result agent does not match the requested adapter."])
+                return self._missing(
+                    day, ["Specialist result agent does not match the requested adapter."]
+                )
         except Exception as exc:
             return self._missing(day, [f"Specialist failed: {type(exc).__name__}."])
 
         missing = result.data_status != "sufficient_data" or result.probability_up is None
         limitations = list(result.limitations)
-        limitations.append("Snapshot availability and later revisions are caller-attested, not independently verified.")
-        return {"agent": self.AGENT_NAME, "day": str(day),
-                "p_up": None if missing else result.probability_up,
-                "evidence": [result.explanation, *result.evidence_ids],
-                "data_missing": missing, "data_status": result.data_status,
-                "limitations": limitations, "observed_at": observed.isoformat(),
-                "prediction_time": prediction.isoformat(), "target_time": target.isoformat(),
-                "price_source": contract["price_source"],
-                "reference_price_definition": contract["reference_price_definition"],
-                "tie_definition": contract["tie_definition"]}
-
-
-# Preferred shared name; the old name remains the very same class.
-SpecialistAdapter = Student2Adapter
+        limitations.append(
+            "Snapshot availability and later revisions are caller-attested, not independently verified."
+        )
+        return {
+            "agent": self.AGENT_NAME,
+            "day": str(day),
+            "p_up": None if missing else result.probability_up,
+            "evidence": [result.explanation, *result.evidence_ids],
+            "data_missing": missing,
+            "data_status": result.data_status,
+            "limitations": limitations,
+            "observed_at": observed.isoformat(),
+            "prediction_time": prediction.isoformat(),
+            "target_time": target.isoformat(),
+            "price_source": contract["price_source"],
+            "reference_price_definition": contract["reference_price_definition"],
+            "tie_definition": contract["tie_definition"],
+        }

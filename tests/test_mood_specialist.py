@@ -5,12 +5,8 @@ from datetime import datetime, timezone
 
 import pytest
 
-from student2.agents.mood_specialist import (
-    _compute_fng_summary,
-    parse_fng_response,
-    run_mood_specialist,
-)
-from student2.agents.schemas import NewsSpecialistResult
+from agents.specialists.mood_specialist import _compute_fng_summary, parse_fng_response, run_mood_specialist
+from agents.schemas import NewsSpecialistResult
 
 
 SAMPLE_FNG_RESPONSE = {

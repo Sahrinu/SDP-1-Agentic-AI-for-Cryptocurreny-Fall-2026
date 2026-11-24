@@ -8,7 +8,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from tests.test_limitless_live_reader import NOW, frame, market
-from student2.agents import limitless_live as live
+from market_data.prediction_markets import limitless_live as live
 
 
 def listing():

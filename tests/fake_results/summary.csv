@@ -1,4 +1,0 @@
-method,brier,direction_right,mean_attack_shift,max_attack_shift
-exchange,0.2577,0.323,0.0769,0.0787
-vote,0.3024,0.452,0.1,0.1333
-average,0.2578,0.355,0.075,0.075

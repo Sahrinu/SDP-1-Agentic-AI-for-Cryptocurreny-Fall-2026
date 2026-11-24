@@ -3,18 +3,28 @@ from datetime import datetime, timezone
 import pytest
 from yfinance.exceptions import YFRateLimitError
 
-from student2.compat import yahoo_compat
-from student2.compat.errors import VendorUnavailableError
+from market_data import yahoo as yahoo_compat
+from market_data.errors import VendorUnavailableError
 
 
 def test_extracts_nested_and_flat_yahoo_articles():
-    nested = yahoo_compat._extract_article_data({"content": {
-        "title": "Bitcoin rises", "summary": "Fresh demand", "provider": {"displayName": "Wire"},
-        "canonicalUrl": {"url": "https://example.com/news"}, "pubDate": "2025-01-01T00:00:00Z",
-    }})
+    nested = yahoo_compat._extract_article_data(
+        {
+            "content": {
+                "title": "Bitcoin rises",
+                "summary": "Fresh demand",
+                "provider": {"displayName": "Wire"},
+                "canonicalUrl": {"url": "https://example.com/news"},
+                "pubDate": "2025-01-01T00:00:00Z",
+            }
+        }
+    )
     assert nested == {
-        "title": "Bitcoin rises", "summary": "Fresh demand", "publisher": "Wire",
-        "link": "https://example.com/news", "pub_date": datetime(2025, 1, 1, tzinfo=timezone.utc),
+        "title": "Bitcoin rises",
+        "summary": "Fresh demand",
+        "publisher": "Wire",
+        "link": "https://example.com/news",
+        "pub_date": datetime(2025, 1, 1, tzinfo=timezone.utc),
     }
     flat = yahoo_compat._extract_article_data({"title": "Flat", "providerPublishTime": 1735689600})
     assert flat["pub_date"] == datetime(2025, 1, 1, tzinfo=timezone.utc)

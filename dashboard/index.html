@@ -1,113 +1,842 @@
 <!doctype html>
 <html lang="en">
-<head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="demo-token" content="__TOKEN__"><meta name="color-scheme" content="light">
-<title>Agent Exchange — Bitcoin research terminal</title>
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%235b83ff'/%3E%3Cpath d='m8 22 8-14 8 14M11 18h10' fill='none' stroke='white' stroke-width='3'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="/styles.css"><script src="/app.js" defer></script>
-</head>
-<body>
-<svg class="svg-library" aria-hidden="true"><defs>
-<symbol id="i-grid" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></symbol>
-<symbol id="i-chart" viewBox="0 0 24 24"><path d="M3 3v18h18M6 14l4-5 4 3 6-7"/></symbol>
-<symbol id="i-agents" viewBox="0 0 24 24"><rect x="4" y="6" width="16" height="14" rx="4"/><path d="M12 3v3M8 11v2m8-2v2m-8 4h8M1 11v5m22-5v5"/></symbol>
-<symbol id="i-flask" viewBox="0 0 24 24"><path d="M8 3h8M10 3v7l-6 9a1 1 0 0 0 1 2h14a1 1 0 0 0 1-2l-6-9V3M7 15h10"/></symbol>
-<symbol id="i-link" viewBox="0 0 24 24"><path d="m10 14 4-4m-6 6-1 1a4 4 0 0 1-6-6l4-4a4 4 0 0 1 6 0m2 10a4 4 0 0 0 6 0l4-4a4 4 0 0 0-6-6l-1 1" transform="translate(1 -1) scale(.92)"/></symbol>
-<symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 7v5h-5M4 17v-5h5M6 6a8 8 0 0 1 14 6M4 12a8 8 0 0 0 14 6"/></symbol>
-<symbol id="i-key" viewBox="0 0 24 24"><circle cx="8" cy="8" r="5"/><path d="m12 12 9 9m-4-4 3-3m-6 0 3-3"/></symbol>
-<symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14m-6-6 6 6-6 6"/></symbol>
-<symbol id="i-shield" viewBox="0 0 24 24"><path d="m12 3 8 3v6c0 5-8 9-8 9s-8-4-8-9V6zM8 12l3 3 5-6"/></symbol>
-<symbol id="i-search" viewBox="0 0 24 24"><circle cx="10" cy="10" r="6"/><path d="m15 15 6 6"/></symbol>
-<symbol id="i-expand" viewBox="0 0 24 24"><path d="M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5"/></symbol>
-<symbol id="i-close" viewBox="0 0 24 24"><path d="m6 6 12 12M6 18 18 6"/></symbol>
-<symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v6l4 2"/></symbol>
-<symbol id="i-agent-chart" viewBox="0 0 24 24"><path d="M5 3v4m0 9v5M12 3v9m0 7v2M19 3v3m0 8v7"/><rect x="3" y="7" width="4" height="9" rx="1"/><rect x="10" y="12" width="4" height="7" rx="1"/><rect x="17" y="6" width="4" height="8" rx="1"/></symbol>
-<symbol id="i-agent-borrowing" viewBox="0 0 24 24"><path d="M3 7h16m-4-4 4 4-4 4M21 17H5m4-4-4 4 4 4"/></symbol>
-<symbol id="i-agent-network" viewBox="0 0 24 24"><circle cx="12" cy="5" r="3"/><circle cx="5" cy="18" r="3"/><circle cx="19" cy="18" r="3"/><path d="m10.5 7.5-4 8m7-8 4 8M8 18h8"/></symbol>
-<symbol id="i-agent-miner" viewBox="0 0 24 24"><path d="m3 21 12-12M5 3c6-2 13 3 16 10l-6-4-4-6M5 3l6 7"/></symbol>
-<symbol id="i-agent-stablecoin" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M8 10h8M8 14h8M12 5v2m0 10v2"/></symbol>
-<symbol id="i-agent-etf" viewBox="0 0 24 24"><path d="m3 8 9-5 9 5H3Zm2 3v7m5-7v7m4-7v7m5-7v7M3 21h18"/></symbol>
-<symbol id="i-agent-news" viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 7h8m-8 4h3m-3 4h3m3-4h2m-2 4h2M8 18h8"/></symbol>
-<symbol id="i-agent-mood" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M8 9h.01M16 9h.01M8 14a4 4 0 0 0 8 0" stroke-width="2"/></symbol>
-<symbol id="i-agent-world-economy" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><ellipse cx="12" cy="12" rx="4" ry="9"/><path d="M3 12h18M5 7h14M5 17h14"/></symbol>
-<symbol id="i-agent-betting" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><path d="M12 10v4m-2-2h4M19 5l2-2"/></symbol>
-<symbol id="i-agent-crash" viewBox="0 0 24 24"><path d="M3 3v18h18M6 7l5 5 4-3 6 8m-5 0h5v-5"/></symbol>
-<symbol id="i-agent-long-term" viewBox="0 0 24 24"><path d="M6 3h12M6 21h12M8 3v4l8 10v4M16 3v4L8 17v4M9 17h6"/></symbol>
-<symbol id="i-agent-contrarian" viewBox="0 0 24 24"><path d="M4 7h5c5 0 3 10 8 10h4m-4-4 4 4-4 4M4 17h4c2 0 3-2 4-5m3-4c.6-.7 1.3-1 2-1h4m-4-4 4 4-4 4"/></symbol>
-</defs></svg>
-<aside class="rail" aria-label="Workspace navigation"><a href="#" class="brand-mark" aria-label="Agent Exchange home">A<span>↗</span></a><nav><a href="#overview" class="rail-link selected" title="Market overview" aria-label="Market overview"><svg><use href="#i-grid"/></svg><span>Overview</span></a><a href="#portfolio" class="rail-link" title="Paper portfolio" aria-label="Paper portfolio"><svg><use href="#i-chart"/></svg><span>Portfolio</span></a><a href="#activity" class="rail-link" title="Live agent activity" aria-label="Live agent activity"><svg><use href="#i-clock"/></svg><span>Activity</span></a><a href="#agents" class="rail-link" title="Agent signals" aria-label="Agent signals"><svg><use href="#i-agents"/></svg><span>Agents</span></a><a href="#research" class="rail-link" title="Historical research" aria-label="Historical research"><svg><use href="#i-flask"/></svg><span>Research</span></a><a href="#connections" class="rail-link" title="Data sources" aria-label="Data sources"><svg><use href="#i-link"/></svg><span>Sources</span></a></nav><button class="rail-link rail-settings" data-open-key title="Gemini session settings" aria-label="Gemini session settings"><svg><use href="#i-key"/></svg><span>Gemini</span></button></aside>
-<div class="shell">
-<header class="topbar"><a class="wordmark" href="#">Agent<span>Exchange</span><span class="workspace-label">RESEARCH TERMINAL</span></a><div class="top-actions"><span class="connection" id="connection"><i></i> Local workspace</span><button class="button small subtle" data-open-key><svg><use href="#i-key"/></svg><span id="key-label">Connect Gemini</span></button><span class="avatar" title="Research workspace">AE</span></div></header>
-<div class="market-strip"><div><span class="status-dot blue"></span><strong>BTC / USDT</strong><span>Binance spot</span></div><div><span>Agent coverage</span><strong id="strip-coverage">— / 13</strong></div><div><span>Sources collected</span><strong id="strip-sources">—</strong></div><div class="strip-end"><svg><use href="#i-shield"/></svg> Simulated funds only</div></div>
-<main>
-<section id="overview" class="overview"><div class="page-heading"><div><div class="breadcrumb">Workspace <span>/</span> Market overview</div><h1>Bitcoin intelligence<span class="live-label"><i></i> RESEARCH</span></h1><p>Market context. Independent perspectives. One auditable decision.</p></div><button class="button primary" data-action="collect"><svg><use href="#i-refresh"/></svg> Refresh market data</button></div>
-<div id="status" class="notice" role="status" aria-live="polite"><span class="status-dot"></span><span id="status-text">Connecting to your research workspace…</span><span class="notice-end" id="notice-end">PAPER MODE</span></div>
-<div class="market-summary"><div class="asset-summary"><span class="coin-icon">₿</span><div><div class="asset-name">Bitcoin <span>BTC</span><span class="rank">#1</span></div><div class="asset-price" id="btc-price">—<small>USDT</small></div><div class="asset-sub"><span id="price-change">Waiting for market data</span><span class="dot-separator">·</span><span id="price-basis">No observation yet</span></div></div></div><div class="market-stat"><span>Daily high <small>last UTC session</small></span><strong id="daily-high">—</strong><div class="range-bar"><i></i></div><div class="range-label"><span id="daily-low">Low —</span><span>USDT</span></div></div><div class="market-stat"><span>Daily volume <small>last UTC session</small></span><strong id="daily-volume">—</strong><span class="mini-muted">BTC traded · Binance spot</span></div><div class="market-stat summary-signal"><span>Exchange forecast <small>next 24 hours</small></span><strong id="summary-prob">—</strong><span class="mini-muted" id="summary-signal">Run a forecast to reveal the signal</span></div></div>
-<div class="terminal-grid"><section class="panel chart-panel" id="price-panel"><div class="panel-head chart-head"><div class="chart-market"><svg><use href="#i-chart"/></svg><strong>BTC / USDT</strong><span>·</span><span>1D</span><span class="exchange-tag">BINANCE</span></div><button class="icon-button" id="expand-chart" title="Expand chart" aria-label="Expand chart"><svg><use href="#i-expand"/></svg></button></div><div class="chart-toolbar"><div class="segmented" role="group" aria-label="Chart history range"><button data-range="30">1M</button><button data-range="90" class="selected" aria-pressed="true">3M</button><button data-range="180">6M</button><button data-range="365">1Y</button><button data-range="1100">All</button></div><div class="chart-tools"><button class="chart-toggle selected" id="ema-toggle" aria-pressed="true">EMA 20 / 50</button><div class="segmented compact" role="group" aria-label="Chart display"><button id="candles-button" class="selected" aria-label="Candlestick chart" aria-pressed="true">Candles</button><button id="line-button" aria-label="Line chart" aria-pressed="false">Line</button></div></div></div><div class="chart-readout" id="chart-readout">Completed UTC daily candles <span>· Refresh market data to begin</span></div><div class="price-canvas-wrap"><canvas id="price-chart" aria-label="Interactive Bitcoin daily price chart with volume"></canvas><div class="chart-empty" id="chart-empty"><span class="empty-chart-icon">⌁</span><strong>Your market view starts here</strong><span>Collect real Bitcoin candles to explore price, volume and trends.</span><button class="button small" data-action="collect">Load market data <span>↗</span></button></div><div class="chart-tooltip" id="chart-tooltip" hidden></div></div><div class="chart-footer"><div><span class="legend-key up"></span>Price <span class="legend-key ema20"></span>EMA 20 <span class="legend-key ema50"></span>EMA 50</div><span id="chart-date">No candle history loaded</span></div></section>
-<aside class="panel forecast-panel"><div class="panel-head"><h2>Exchange forecast</h2><span class="label blue-label">24H HORIZON</span></div><div class="forecast-display"><div class="gauge"><svg viewBox="0 0 240 134" aria-hidden="true"><path class="gauge-track" d="M24 120a96 96 0 0 1 192 0"/><path id="gauge-arc" class="gauge-fill" d="M24 120a96 96 0 0 1 192 0" pathLength="100" stroke-dasharray="0 100"/></svg><div class="gauge-value"><span id="prob">—</span><small>PROBABILITY OF UP</small></div><span class="gauge-zero">0%</span><span class="gauge-full">100%</span></div><div class="signal-pill" id="bias">Awaiting forecast</div></div><div class="method-rows" id="methods"><div><span><i class="method-dot exchange"></i>Agent Exchange</span><strong id="method-exchange">—</strong></div><div><span><i class="method-dot average"></i>Simple average</span><strong id="method-average">—</strong></div><div><span><i class="method-dot vote"></i>Majority vote</span><strong id="method-vote">—</strong></div></div><div class="coverage-line"><span><b id="active-count">0</b> of 13 specialists active</span><a href="#agents">View agents ↗</a></div><div class="coverage-track"><i id="coverage-fill"></i></div><div class="forecast-actions"><button class="button primary full" data-action="forecast">Generate 24h forecast <svg><use href="#i-arrow"/></svg></button><button class="button full" data-action="paper">Record paper decision</button><button class="text-button" data-action="debate">Compare Bull / Bear / Judge <span>↗</span></button></div><div class="forecast-footnote" id="forecast-window"><svg><use href="#i-clock"/></svg><span>Outcome available 24 hours after forecast.</span></div></aside></div>
-<div class="metric-grid"><div class="metric-card"><div class="metric-icon"><svg><use href="#i-agents"/></svg></div><div><span>Specialist coverage</span><strong id="count">0 <small>/ 13</small></strong><small id="coverage-note">Evidence determines participation</small></div><div id="coverage-dots" class="coverage-dots" aria-hidden="true"></div></div><div class="metric-card"><div class="metric-icon green"><svg><use href="#i-shield"/></svg></div><div><span>BTC allocation limit</span><strong>25<small>%</small></strong><small>Total BTC value / portfolio equity</small></div><span class="label green-label">ENFORCED</span></div><div class="metric-card"><div class="metric-icon purple"><svg><use href="#i-chart"/></svg></div><div><span>Paper portfolio</span><strong id="equity">&#8212;</strong><small id="portfolio-sub">No paper decision displayed</small></div></div><div class="metric-card"><div class="metric-icon amber"><svg><use href="#i-key"/></svg></div><div><span>Model provider</span><strong class="model-name">Gemini</strong><small id="model-state">Session key not configured</small></div><button class="text-button" data-open-key aria-label="Configure Gemini key">↗</button></div></div></section>
-<section class="panel section portfolio-panel" id="portfolio" aria-labelledby="portfolio-title">
-<div class="section-head"><div><div class="eyebrow">YOUR VIRTUAL ACCOUNT</div><h2 id="portfolio-title">Paper portfolio value</h2><p>Cash + the current value of your BTC. Prices update about once a minute while the local server runs.</p></div><span class="label" id="portfolio-status">WAITING FOR PRICE</span></div>
-<div class="portfolio-overview"><div><span>Total account value · USD</span><strong id="portfolio-equity">—</strong><span id="portfolio-pnl">Waiting for valuation</span></div><div class="portfolio-balances">
-<div><span>Cash · USD</span><strong id="portfolio-cash">—</strong></div>
-<div><span>BTC you own</span><strong id="portfolio-btc">—</strong></div>
-<div><span>BTC value · USD</span><strong id="portfolio-btc-value">—</strong></div>
-<div><span>Realized profit / loss</span><strong id="portfolio-realized">—</strong></div>
-<div><span>Unrealized profit / loss</span><strong id="portfolio-unrealized">—</strong></div>
-<div><span>Total trading fees</span><strong id="portfolio-fees">—</strong></div>
-</div></div>
-<p id="portfolio-price-status" class="portfolio-price-status" role="status">Waiting for the first Binance price. No forecast or trade is needed.</p>
-<div class="portfolio-chart-wrap"><canvas id="portfolio-chart" aria-label="Paper portfolio value in simulated USD over time"></canvas><div id="portfolio-chart-empty">Your saved account-value history will appear here.</div></div>
-<div class="portfolio-chart-footer"><span>Account value · simulated USD</span><span id="portfolio-history-status">No valuation observations yet</span></div>
-<p class="portfolio-note">Realized profit/loss comes from completed sales. Unrealized profit/loss is the change in value of BTC you still hold. Fees are already included in profit/loss. Valuation uses Binance BTC/USDT with 1 USDT treated as 1 paper USD. Refreshing values never places trades; risk controls run when a decision is recorded.</p>
-</section>
-<section class="panel section activity-panel" id="activity" aria-labelledby="activity-title"><div class="section-head"><div><div class="eyebrow">LIVE EXECUTION</div><h2 id="activity-title">The decision room</h2><p>Watch each specialist evaluate its evidence, then see how the forecasts combine.</p></div><span class="label" id="activity-state">READY</span></div><div class="activity-overview"><div class="activity-phase"><span class="activity-indicator" id="activity-indicator"></span><div><strong id="activity-phase">Ready for a forecast</strong><span id="activity-caption">All 13 agents are queued until you generate a forecast.</span></div></div><div class="activity-timing"><strong id="activity-time">—</strong><span>elapsed</span></div></div><div class="activity-progress" role="progressbar" aria-label="Specialists evaluated" aria-valuemin="0" aria-valuemax="13" aria-valuenow="0" id="activity-progress"><i id="activity-progress-fill"></i></div><div class="activity-body"><div><div class="activity-grid" id="activity-agents"></div><div class="activity-methods" id="activity-methods"></div><div class="activity-summary" id="activity-summary">Queued → evaluate evidence → validate forecast → combine.</div></div><aside class="activity-log-panel"><div class="activity-log-title"><span>Execution timeline</span><span id="activity-event-count">0 events</span></div><ol class="activity-log" id="activity-log" aria-label="Agent execution timeline"><li class="activity-empty">Execution events will appear here.</li></ol></aside></div><div class="activity-bottom"><span>Real execution stages and returned evidence · no artificial thinking animation</span><span>Forecasting does not place a paper trade</span></div></section>
-<section class="panel section agents-panel" id="agents"><div class="section-head"><div><div class="eyebrow">THE SPECIALIST DESK</div><h2>13 perspectives. Every signal traceable.</h2><p>Only agents with usable evidence contribute to the forecast.</p></div><span class="label" id="agent-summary">13 specialist roles</span></div><div class="table-toolbar"><div class="tabs" role="group" aria-label="Filter specialists"><button data-filter="all" class="selected">All agents <span id="all-count">13</span></button><button data-filter="active">Active <span id="filter-active-count">0</span></button><button data-filter="missing">Unavailable <span id="filter-missing-count">0</span></button></div><label class="search-box"><svg><use href="#i-search"/></svg><input type="search" id="agent-search" placeholder="Search specialists" aria-label="Search specialists"></label></div><div class="table-scroll"><table class="agent-table"><thead><tr><th>#</th><th>Specialist</th><th>Perspective</th><th>Signal</th><th>Probability of up</th><th>Weight</th><th>Status</th><th>Evidence</th></tr></thead><tbody id="agent-rows"></tbody></table></div><div class="table-foot"><span id="table-caption">13 registered specialists · no forecast yet</span><span class="status-dot blue"></span><span>Missing evidence → abstain</span></div></section>
-<div class="bottom-grid section"><section class="panel" id="connections"><div class="section-head compact-head"><div><div class="eyebrow">DATA HEALTH</div><h2>Connected sources</h2></div><span class="label" id="source-summary">NOT COLLECTED</span></div><div id="sources" class="source-list"><div class="empty-inline">Source freshness and collection status appear here.</div></div><div class="panel-note"><svg><use href="#i-clock"/></svg><span>Daily sources retain their publication dates. Macro values carry across weekends; forward fill does not create new information.</span></div></section><section class="panel decision-panel"><div class="section-head compact-head"><div><div class="eyebrow">PAPER EXECUTION</div><h2>Paper decision & risk controls</h2></div><span class="label green-label" id="risk-label">PAPER ONLY</span></div><form id="paper-settings-form" class="paper-settings">
-<h3>Try paper trading</h3>
-<p>Simulated $10,000 account. Choose your limits, then enable using a fresh forecast. Demo values are editable before enabling.</p>
-<div class="paper-fields">
-<label>Forecast change limit (percentage points)<input id="paper-swing" type="number" min="0.1" max="100" step="0.1" value="20" required></label>
-<label>Loss limit (% of starting equity)<input id="paper-loss" type="number" min="0.1" max="100" step="0.1" value="10" required></label>
-<label>BUY size (% of available cash)<input id="paper-buy-size" type="number" min="0.1" max="25" step="0.1" value="10" required></label>
-</div>
-<p id="paper-settings-summary">Generate a forecast, then enable paper trading. Total BTC holdings remain capped at 25% of equity.</p>
-<button class="button primary" id="enable-paper" type="submit">Enable paper trading</button>
-<div id="paper-feedback" role="status"></div>
-</form>
-<label class="paper-action-label" for="paper-action">Paper decision mode</label>
-<select id="paper-action"><option value="">Follow forecast</option><option value="BUY">Manual simulated BUY</option><option value="SELL">Manual simulated SELL</option><option value="HOLD">Manual simulated HOLD</option></select>
-<button type="button" class="button paper-record" data-action="paper">Record selected paper decision</button>
-<p class="paper-help">Record the selected action above. One decision per forecast; generate a new forecast for the next decision. SELL closes the simulated BTC position. Limits stay fixed for this account; a triggered breaker stays paused across restarts.</p>
-<div class="decision-hero"><span class="decision-icon"><svg><use href="#i-shield"/></svg></span><div><strong id="decision-action">Ready when you are</strong><span id="decision-reason">Generate a forecast, then record a guarded paper decision.</span></div></div><div class="risk-checks"><div><span>Position limit</span><strong>25% of equity</strong></div><div><span>Circuit breaker</span><strong id="breaker-state">Not configured</strong></div><div><span>Execution costs</span><strong>0.10% fee + 5 bps slip</strong></div><div><span>Displayed forecast: 20% agent influence cap</span><strong id="cap-state">Requires ≥ 5 active</strong></div></div><details class="audit-details"><summary>Inspect paper ledger & decision</summary><pre id="decision">No recorded decision yet.</pre></details><details class="audit-details"><summary>Forecast contract, weights & Gemini debate</summary><pre id="contract">Generate a forecast to inspect its event definition.</pre></details></section></div>
-<section class="panel section research-panel" id="research"><div class="section-head"><div><div class="eyebrow">REPLAY LAB</div><h2>See the decisions. Reveal the outcomes.</h2><p>Compare completed historical forecasts without waiting for tomorrow.</p></div><div class="replay-actions"><button class="button small" data-action="archive-replay">Settle saved live forecasts</button><button class="button small" data-action="real-replay"><svg><use href="#i-flask"/></svg> Replay real BTC history</button><button class="button small subtle" data-action="replay">Synthetic walkthrough</button></div></div><div id="replay-badge" class="replay-mode">NO REPLAY RUN YET <span>Real history uses available price agents. Synthetic runs are labelled separately.</span></div><div class="replay-chart-wrap"><canvas id="replay-chart" aria-label="Historical forecast method comparison"></canvas><div id="replay-empty" class="replay-empty">Your method comparison will appear here</div></div><div class="replay-legend"><span><i class="method-dot exchange"></i>Agent Exchange</span><span><i class="method-dot average"></i>Simple average</span><span><i class="method-dot vote"></i>Majority vote</span><span class="mini-muted">Probability of up · completed days</span></div><div id="replay-results" class="replay-results"></div>
-<details class="audit-details research-details" open>
-  <summary>Agent coins &amp; influence</summary>
-  <h3>Live ledger</h3>
-  <p id="live-coin-status">Live balances are available in the dashboard.</p>
-  <div class="table-scroll">
-    <table class="agent-table">
-      <thead><tr><th>Agent</th><th>Balance</th><th>Latest settlement gain / loss</th><th>Latest forecast weight</th><th>Participation</th></tr></thead>
-      <tbody id="live-coin-rows"></tbody>
-    </table>
-  </div>
-  <h3>Historical replay</h3>
-  <p id="replay-coin-status">Run a replay to see each agent's balance and influence.</p>
-  <div id="replay-coin-history" hidden>
-    <label for="replay-coin-date">Replay day (UTC)</label>
-    <select id="replay-coin-date"></select>
-    <div class="table-scroll">
-      <table class="agent-table">
-        <thead><tr><th>Agent</th><th>Opening coins</th><th>Gain / loss</th><th>Closing coins</th><th>Forecast weight</th><th>Participation</th></tr></thead>
-        <tbody id="replay-coin-rows"></tbody>
-      </table>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="demo-token" content="__TOKEN__" />
+    <meta name="color-scheme" content="light" />
+    <title>Agent Exchange — Bitcoin research terminal</title>
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%235b83ff'/%3E%3Cpath d='m8 22 8-14 8 14M11 18h10' fill='none' stroke='white' stroke-width='3'/%3E%3C/svg%3E"
+    />
+    <link rel="stylesheet" href="/styles.css" />
+    <script src="/app.js" defer></script>
+  </head>
+  <body>
+    <svg class="svg-library" aria-hidden="true">
+      <defs>
+        <symbol id="i-grid" viewBox="0 0 24 24">
+          <rect x="3" y="3" width="7" height="7" rx="1.5" />
+          <rect x="14" y="3" width="7" height="7" rx="1.5" />
+          <rect x="3" y="14" width="7" height="7" rx="1.5" />
+          <rect x="14" y="14" width="7" height="7" rx="1.5" />
+        </symbol>
+        <symbol id="i-chart" viewBox="0 0 24 24"><path d="M3 3v18h18M6 14l4-5 4 3 6-7" /></symbol>
+        <symbol id="i-agents" viewBox="0 0 24 24">
+          <rect x="4" y="6" width="16" height="14" rx="4" />
+          <path d="M12 3v3M8 11v2m8-2v2m-8 4h8M1 11v5m22-5v5" />
+        </symbol>
+        <symbol id="i-flask" viewBox="0 0 24 24">
+          <path d="M8 3h8M10 3v7l-6 9a1 1 0 0 0 1 2h14a1 1 0 0 0 1-2l-6-9V3M7 15h10" />
+        </symbol>
+        <symbol id="i-link" viewBox="0 0 24 24">
+          <path
+            d="m10 14 4-4m-6 6-1 1a4 4 0 0 1-6-6l4-4a4 4 0 0 1 6 0m2 10a4 4 0 0 0 6 0l4-4a4 4 0 0 0-6-6l-1 1"
+            transform="translate(1 -1) scale(.92)"
+          />
+        </symbol>
+        <symbol id="i-refresh" viewBox="0 0 24 24">
+          <path d="M20 7v5h-5M4 17v-5h5M6 6a8 8 0 0 1 14 6M4 12a8 8 0 0 0 14 6" />
+        </symbol>
+        <symbol id="i-key" viewBox="0 0 24 24">
+          <circle cx="8" cy="8" r="5" />
+          <path d="m12 12 9 9m-4-4 3-3m-6 0 3-3" />
+        </symbol>
+        <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14m-6-6 6 6-6 6" /></symbol>
+        <symbol id="i-shield" viewBox="0 0 24 24">
+          <path d="m12 3 8 3v6c0 5-8 9-8 9s-8-4-8-9V6zM8 12l3 3 5-6" />
+        </symbol>
+        <symbol id="i-search" viewBox="0 0 24 24">
+          <circle cx="10" cy="10" r="6" />
+          <path d="m15 15 6 6" />
+        </symbol>
+        <symbol id="i-expand" viewBox="0 0 24 24">
+          <path d="M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5" />
+        </symbol>
+        <symbol id="i-close" viewBox="0 0 24 24"><path d="m6 6 12 12M6 18 18 6" /></symbol>
+        <symbol id="i-clock" viewBox="0 0 24 24">
+          <circle cx="12" cy="12" r="9" />
+          <path d="M12 7v6l4 2" />
+        </symbol>
+        <symbol id="i-agent-chart" viewBox="0 0 24 24">
+          <path d="M5 3v4m0 9v5M12 3v9m0 7v2M19 3v3m0 8v7" />
+          <rect x="3" y="7" width="4" height="9" rx="1" />
+          <rect x="10" y="12" width="4" height="7" rx="1" />
+          <rect x="17" y="6" width="4" height="8" rx="1" />
+        </symbol>
+        <symbol id="i-agent-borrowing" viewBox="0 0 24 24">
+          <path d="M3 7h16m-4-4 4 4-4 4M21 17H5m4-4-4 4 4 4" />
+        </symbol>
+        <symbol id="i-agent-network" viewBox="0 0 24 24">
+          <circle cx="12" cy="5" r="3" />
+          <circle cx="5" cy="18" r="3" />
+          <circle cx="19" cy="18" r="3" />
+          <path d="m10.5 7.5-4 8m7-8 4 8M8 18h8" />
+        </symbol>
+        <symbol id="i-agent-miner" viewBox="0 0 24 24">
+          <path d="m3 21 12-12M5 3c6-2 13 3 16 10l-6-4-4-6M5 3l6 7" />
+        </symbol>
+        <symbol id="i-agent-stablecoin" viewBox="0 0 24 24">
+          <circle cx="12" cy="12" r="9" />
+          <path d="M8 10h8M8 14h8M12 5v2m0 10v2" />
+        </symbol>
+        <symbol id="i-agent-etf" viewBox="0 0 24 24">
+          <path d="m3 8 9-5 9 5H3Zm2 3v7m5-7v7m4-7v7m5-7v7M3 21h18" />
+        </symbol>
+        <symbol id="i-agent-news" viewBox="0 0 24 24">
+          <rect x="4" y="3" width="16" height="18" rx="2" />
+          <path d="M8 7h8m-8 4h3m-3 4h3m3-4h2m-2 4h2M8 18h8" />
+        </symbol>
+        <symbol id="i-agent-mood" viewBox="0 0 24 24">
+          <circle cx="12" cy="12" r="9" />
+          <path d="M8 9h.01M16 9h.01M8 14a4 4 0 0 0 8 0" stroke-width="2" />
+        </symbol>
+        <symbol id="i-agent-world-economy" viewBox="0 0 24 24">
+          <circle cx="12" cy="12" r="9" />
+          <ellipse cx="12" cy="12" rx="4" ry="9" />
+          <path d="M3 12h18M5 7h14M5 17h14" />
+        </symbol>
+        <symbol id="i-agent-betting" viewBox="0 0 24 24">
+          <circle cx="12" cy="12" r="9" />
+          <circle cx="12" cy="12" r="5" />
+          <path d="M12 10v4m-2-2h4M19 5l2-2" />
+        </symbol>
+        <symbol id="i-agent-crash" viewBox="0 0 24 24">
+          <path d="M3 3v18h18M6 7l5 5 4-3 6 8m-5 0h5v-5" />
+        </symbol>
+        <symbol id="i-agent-long-term" viewBox="0 0 24 24">
+          <path d="M6 3h12M6 21h12M8 3v4l8 10v4M16 3v4L8 17v4M9 17h6" />
+        </symbol>
+        <symbol id="i-agent-contrarian" viewBox="0 0 24 24">
+          <path
+            d="M4 7h5c5 0 3 10 8 10h4m-4-4 4 4-4 4M4 17h4c2 0 3-2 4-5m3-4c.6-.7 1.3-1 2-1h4m-4-4 4 4-4 4"
+          />
+        </symbol>
+      </defs>
+    </svg>
+    <aside class="rail" aria-label="Workspace navigation">
+      <a href="#" class="brand-mark" aria-label="Agent Exchange home">A<span>↗</span></a>
+      <nav>
+        <a
+          href="#overview"
+          class="rail-link selected"
+          title="Market overview"
+          aria-label="Market overview"
+          ><svg><use href="#i-grid" /></svg><span>Overview</span></a
+        ><a href="#portfolio" class="rail-link" title="Paper portfolio" aria-label="Paper portfolio"
+          ><svg><use href="#i-chart" /></svg><span>Portfolio</span></a
+        ><a
+          href="#activity"
+          class="rail-link"
+          title="Live agent activity"
+          aria-label="Live agent activity"
+          ><svg><use href="#i-clock" /></svg><span>Activity</span></a
+        ><a href="#agents" class="rail-link" title="Agent signals" aria-label="Agent signals"
+          ><svg><use href="#i-agents" /></svg><span>Agents</span></a
+        ><a
+          href="#research"
+          class="rail-link"
+          title="Historical research"
+          aria-label="Historical research"
+          ><svg><use href="#i-flask" /></svg><span>Research</span></a
+        ><a href="#connections" class="rail-link" title="Data sources" aria-label="Data sources"
+          ><svg><use href="#i-link" /></svg><span>Sources</span></a
+        >
+      </nav>
+      <button
+        class="rail-link rail-settings"
+        data-open-key
+        title="Gemini session settings"
+        aria-label="Gemini session settings"
+      >
+        <svg><use href="#i-key" /></svg><span>Gemini</span>
+      </button>
+    </aside>
+    <div class="shell">
+      <header class="topbar">
+        <a class="wordmark" href="#"
+          >Agent<span>Exchange</span><span class="workspace-label">RESEARCH TERMINAL</span></a
+        >
+        <div class="top-actions">
+          <span class="connection" id="connection"><i></i> Local workspace</span
+          ><button class="button small subtle" data-open-key>
+            <svg><use href="#i-key" /></svg><span id="key-label">Connect Gemini</span></button
+          ><span class="avatar" title="Research workspace">AE</span>
+        </div>
+      </header>
+      <div class="market-strip">
+        <div>
+          <span class="status-dot blue"></span><strong>BTC / USDT</strong><span>Binance spot</span>
+        </div>
+        <div><span>Agent coverage</span><strong id="strip-coverage">— / 13</strong></div>
+        <div><span>Sources collected</span><strong id="strip-sources">—</strong></div>
+        <div class="strip-end">
+          <svg><use href="#i-shield" /></svg> Simulated funds only
+        </div>
+      </div>
+      <main>
+        <section id="overview" class="overview">
+          <div class="page-heading">
+            <div>
+              <div class="breadcrumb">Workspace <span>/</span> Market overview</div>
+              <h1>
+                Bitcoin intelligence<span class="live-label"><i></i> RESEARCH</span>
+              </h1>
+              <p>Market context. Independent perspectives. One auditable decision.</p>
+            </div>
+            <button class="button primary" data-action="collect">
+              <svg><use href="#i-refresh" /></svg> Refresh market data
+            </button>
+          </div>
+          <div id="status" class="notice" role="status" aria-live="polite">
+            <span class="status-dot"></span
+            ><span id="status-text">Connecting to your research workspace…</span
+            ><span class="notice-end" id="notice-end">PAPER MODE</span>
+          </div>
+          <div class="market-summary">
+            <div class="asset-summary">
+              <span class="coin-icon">₿</span>
+              <div>
+                <div class="asset-name">Bitcoin <span>BTC</span><span class="rank">#1</span></div>
+                <div class="asset-price" id="btc-price">—<small>USDT</small></div>
+                <div class="asset-sub">
+                  <span id="price-change">Waiting for market data</span
+                  ><span class="dot-separator">·</span
+                  ><span id="price-basis">No observation yet</span>
+                </div>
+              </div>
+            </div>
+            <div class="market-stat">
+              <span>Daily high <small>last UTC session</small></span
+              ><strong id="daily-high">—</strong>
+              <div class="range-bar"><i></i></div>
+              <div class="range-label"><span id="daily-low">Low —</span><span>USDT</span></div>
+            </div>
+            <div class="market-stat">
+              <span>Daily volume <small>last UTC session</small></span
+              ><strong id="daily-volume">—</strong
+              ><span class="mini-muted">BTC traded · Binance spot</span>
+            </div>
+            <div class="market-stat summary-signal">
+              <span>Exchange forecast <small>next 24 hours</small></span
+              ><strong id="summary-prob">—</strong
+              ><span class="mini-muted" id="summary-signal"
+                >Run a forecast to reveal the signal</span
+              >
+            </div>
+          </div>
+          <div class="terminal-grid">
+            <section class="panel chart-panel" id="price-panel">
+              <div class="panel-head chart-head">
+                <div class="chart-market">
+                  <svg><use href="#i-chart" /></svg><strong>BTC / USDT</strong><span>·</span
+                  ><span>1D</span><span class="exchange-tag">BINANCE</span>
+                </div>
+                <button
+                  class="icon-button"
+                  id="expand-chart"
+                  title="Expand chart"
+                  aria-label="Expand chart"
+                >
+                  <svg><use href="#i-expand" /></svg>
+                </button>
+              </div>
+              <div class="chart-toolbar">
+                <div class="segmented" role="group" aria-label="Chart history range">
+                  <button data-range="30">1M</button
+                  ><button data-range="90" class="selected" aria-pressed="true">3M</button
+                  ><button data-range="180">6M</button><button data-range="365">1Y</button
+                  ><button data-range="1100">All</button>
+                </div>
+                <div class="chart-tools">
+                  <button class="chart-toggle selected" id="ema-toggle" aria-pressed="true">
+                    EMA 20 / 50
+                  </button>
+                  <div class="segmented compact" role="group" aria-label="Chart display">
+                    <button
+                      id="candles-button"
+                      class="selected"
+                      aria-label="Candlestick chart"
+                      aria-pressed="true"
+                    >
+                      Candles</button
+                    ><button id="line-button" aria-label="Line chart" aria-pressed="false">
+                      Line
+                    </button>
+                  </div>
+                </div>
+              </div>
+              <div class="chart-readout" id="chart-readout">
+                Completed UTC daily candles <span>· Refresh market data to begin</span>
+              </div>
+              <div class="price-canvas-wrap">
+                <canvas
+                  id="price-chart"
+                  aria-label="Interactive Bitcoin daily price chart with volume"
+                ></canvas>
+                <div class="chart-empty" id="chart-empty">
+                  <span class="empty-chart-icon">⌁</span
+                  ><strong>Your market view starts here</strong
+                  ><span>Collect real Bitcoin candles to explore price, volume and trends.</span
+                  ><button class="button small" data-action="collect">
+                    Load market data <span>↗</span>
+                  </button>
+                </div>
+                <div class="chart-tooltip" id="chart-tooltip" hidden></div>
+              </div>
+              <div class="chart-footer">
+                <div>
+                  <span class="legend-key up"></span>Price <span class="legend-key ema20"></span>EMA
+                  20 <span class="legend-key ema50"></span>EMA 50
+                </div>
+                <span id="chart-date">No candle history loaded</span>
+              </div>
+            </section>
+            <aside class="panel forecast-panel">
+              <div class="panel-head">
+                <h2>Exchange forecast</h2>
+                <span class="label blue-label">24H HORIZON</span>
+              </div>
+              <div class="forecast-display">
+                <div class="gauge">
+                  <svg viewBox="0 0 240 134" aria-hidden="true">
+                    <path class="gauge-track" d="M24 120a96 96 0 0 1 192 0" />
+                    <path
+                      id="gauge-arc"
+                      class="gauge-fill"
+                      d="M24 120a96 96 0 0 1 192 0"
+                      pathLength="100"
+                      stroke-dasharray="0 100"
+                    />
+                  </svg>
+                  <div class="gauge-value">
+                    <span id="prob">—</span><small>PROBABILITY OF UP</small>
+                  </div>
+                  <span class="gauge-zero">0%</span><span class="gauge-full">100%</span>
+                </div>
+                <div class="signal-pill" id="bias">Awaiting forecast</div>
+              </div>
+              <div class="method-rows" id="methods">
+                <div>
+                  <span><i class="method-dot exchange"></i>Agent Exchange</span
+                  ><strong id="method-exchange">—</strong>
+                </div>
+                <div>
+                  <span><i class="method-dot average"></i>Simple average</span
+                  ><strong id="method-average">—</strong>
+                </div>
+                <div>
+                  <span><i class="method-dot vote"></i>Majority vote</span
+                  ><strong id="method-vote">—</strong>
+                </div>
+              </div>
+              <div class="coverage-line">
+                <span><b id="active-count">0</b> of 13 specialists active</span
+                ><a href="#agents">View agents ↗</a>
+              </div>
+              <div class="coverage-track"><i id="coverage-fill"></i></div>
+              <div class="forecast-actions">
+                <button class="button primary full" data-action="forecast">
+                  Generate 24h forecast <svg><use href="#i-arrow" /></svg></button
+                ><button class="button full" data-action="paper">Record paper decision</button
+                ><button class="text-button" data-action="debate">
+                  Compare Bull / Bear / Judge <span>↗</span>
+                </button>
+              </div>
+              <div class="forecast-footnote" id="forecast-window">
+                <svg><use href="#i-clock" /></svg
+                ><span>Outcome available 24 hours after forecast.</span>
+              </div>
+            </aside>
+          </div>
+          <div class="metric-grid">
+            <div class="metric-card">
+              <div class="metric-icon">
+                <svg><use href="#i-agents" /></svg>
+              </div>
+              <div>
+                <span>Specialist coverage</span><strong id="count">0 <small>/ 13</small></strong
+                ><small id="coverage-note">Evidence determines participation</small>
+              </div>
+              <div id="coverage-dots" class="coverage-dots" aria-hidden="true"></div>
+            </div>
+            <div class="metric-card">
+              <div class="metric-icon green">
+                <svg><use href="#i-shield" /></svg>
+              </div>
+              <div>
+                <span>BTC allocation limit</span><strong>25<small>%</small></strong
+                ><small>Total BTC value / portfolio equity</small>
+              </div>
+              <span class="label green-label">ENFORCED</span>
+            </div>
+            <div class="metric-card">
+              <div class="metric-icon purple">
+                <svg><use href="#i-chart" /></svg>
+              </div>
+              <div>
+                <span>Paper portfolio</span><strong id="equity">&#8212;</strong
+                ><small id="portfolio-sub">No paper decision displayed</small>
+              </div>
+            </div>
+            <div class="metric-card">
+              <div class="metric-icon amber">
+                <svg><use href="#i-key" /></svg>
+              </div>
+              <div>
+                <span>Model provider</span><strong class="model-name">Gemini</strong
+                ><small id="model-state">Session key not configured</small>
+              </div>
+              <button class="text-button" data-open-key aria-label="Configure Gemini key">
+                ↗
+              </button>
+            </div>
+          </div>
+        </section>
+        <section
+          class="panel section portfolio-panel"
+          id="portfolio"
+          aria-labelledby="portfolio-title"
+        >
+          <div class="section-head">
+            <div>
+              <div class="eyebrow">YOUR VIRTUAL ACCOUNT</div>
+              <h2 id="portfolio-title">Paper portfolio value</h2>
+              <p>
+                Cash + the current value of your BTC. Prices update about once a minute while the
+                local server runs.
+              </p>
+            </div>
+            <span class="label" id="portfolio-status">WAITING FOR PRICE</span>
+          </div>
+          <div class="portfolio-overview">
+            <div>
+              <span>Total account value · USD</span><strong id="portfolio-equity">—</strong
+              ><span id="portfolio-pnl">Waiting for valuation</span>
+            </div>
+            <div class="portfolio-balances">
+              <div><span>Cash · USD</span><strong id="portfolio-cash">—</strong></div>
+              <div><span>BTC you own</span><strong id="portfolio-btc">—</strong></div>
+              <div><span>BTC value · USD</span><strong id="portfolio-btc-value">—</strong></div>
+              <div>
+                <span>Realized profit / loss</span><strong id="portfolio-realized">—</strong>
+              </div>
+              <div>
+                <span>Unrealized profit / loss</span><strong id="portfolio-unrealized">—</strong>
+              </div>
+              <div><span>Total trading fees</span><strong id="portfolio-fees">—</strong></div>
+            </div>
+          </div>
+          <p id="portfolio-price-status" class="portfolio-price-status" role="status">
+            Waiting for the first Binance price. No forecast or trade is needed.
+          </p>
+          <div class="portfolio-chart-wrap">
+            <canvas
+              id="portfolio-chart"
+              aria-label="Paper portfolio value in simulated USD over time"
+            ></canvas>
+            <div id="portfolio-chart-empty">Your saved account-value history will appear here.</div>
+          </div>
+          <div class="portfolio-chart-footer">
+            <span>Account value · simulated USD</span
+            ><span id="portfolio-history-status">No valuation observations yet</span>
+          </div>
+          <p class="portfolio-note">
+            Realized profit/loss comes from completed sales. Unrealized profit/loss is the change in
+            value of BTC you still hold. Fees are already included in profit/loss. Valuation uses
+            Binance BTC/USDT with 1 USDT treated as 1 paper USD. Refreshing values never places
+            trades; risk controls run when a decision is recorded.
+          </p>
+        </section>
+        <section
+          class="panel section activity-panel"
+          id="activity"
+          aria-labelledby="activity-title"
+        >
+          <div class="section-head">
+            <div>
+              <div class="eyebrow">LIVE EXECUTION</div>
+              <h2 id="activity-title">The decision room</h2>
+              <p>
+                Watch each specialist evaluate its evidence, then see how the forecasts combine.
+              </p>
+            </div>
+            <span class="label" id="activity-state">READY</span>
+          </div>
+          <div class="activity-overview">
+            <div class="activity-phase">
+              <span class="activity-indicator" id="activity-indicator"></span>
+              <div>
+                <strong id="activity-phase">Ready for a forecast</strong
+                ><span id="activity-caption"
+                  >All 13 agents are queued until you generate a forecast.</span
+                >
+              </div>
+            </div>
+            <div class="activity-timing">
+              <strong id="activity-time">—</strong><span>elapsed</span>
+            </div>
+          </div>
+          <div
+            class="activity-progress"
+            role="progressbar"
+            aria-label="Specialists evaluated"
+            aria-valuemin="0"
+            aria-valuemax="13"
+            aria-valuenow="0"
+            id="activity-progress"
+          >
+            <i id="activity-progress-fill"></i>
+          </div>
+          <div class="activity-body">
+            <div>
+              <div class="activity-grid" id="activity-agents"></div>
+              <div class="activity-methods" id="activity-methods"></div>
+              <div class="activity-summary" id="activity-summary">
+                Queued → evaluate evidence → validate forecast → combine.
+              </div>
+            </div>
+            <aside class="activity-log-panel">
+              <div class="activity-log-title">
+                <span>Execution timeline</span><span id="activity-event-count">0 events</span>
+              </div>
+              <ol class="activity-log" id="activity-log" aria-label="Agent execution timeline">
+                <li class="activity-empty">Execution events will appear here.</li>
+              </ol>
+            </aside>
+          </div>
+          <div class="activity-bottom">
+            <span
+              >Real execution stages and returned evidence · no artificial thinking animation</span
+            ><span>Forecasting does not place a paper trade</span>
+          </div>
+        </section>
+        <section class="panel section agents-panel" id="agents">
+          <div class="section-head">
+            <div>
+              <div class="eyebrow">THE SPECIALIST DESK</div>
+              <h2>13 perspectives. Every signal traceable.</h2>
+              <p>Only agents with usable evidence contribute to the forecast.</p>
+            </div>
+            <span class="label" id="agent-summary">13 specialist roles</span>
+          </div>
+          <div class="table-toolbar">
+            <div class="tabs" role="group" aria-label="Filter specialists">
+              <button data-filter="all" class="selected">
+                All agents <span id="all-count">13</span></button
+              ><button data-filter="active">Active <span id="filter-active-count">0</span></button
+              ><button data-filter="missing">
+                Unavailable <span id="filter-missing-count">0</span>
+              </button>
+            </div>
+            <label class="search-box"
+              ><svg><use href="#i-search" /></svg
+              ><input
+                type="search"
+                id="agent-search"
+                placeholder="Search specialists"
+                aria-label="Search specialists"
+            /></label>
+          </div>
+          <div class="table-scroll">
+            <table class="agent-table">
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Specialist</th>
+                  <th>Perspective</th>
+                  <th>Signal</th>
+                  <th>Probability of up</th>
+                  <th>Weight</th>
+                  <th>Status</th>
+                  <th>Evidence</th>
+                </tr>
+              </thead>
+              <tbody id="agent-rows"></tbody>
+            </table>
+          </div>
+          <div class="table-foot">
+            <span id="table-caption">13 registered specialists · no forecast yet</span
+            ><span class="status-dot blue"></span><span>Missing evidence → abstain</span>
+          </div>
+        </section>
+        <div class="bottom-grid section">
+          <section class="panel" id="connections">
+            <div class="section-head compact-head">
+              <div>
+                <div class="eyebrow">DATA HEALTH</div>
+                <h2>Connected sources</h2>
+              </div>
+              <span class="label" id="source-summary">NOT COLLECTED</span>
+            </div>
+            <div id="sources" class="source-list">
+              <div class="empty-inline">Source freshness and collection status appear here.</div>
+            </div>
+            <div class="panel-note">
+              <svg><use href="#i-clock" /></svg
+              ><span
+                >Daily sources retain their publication dates. Macro values carry across weekends;
+                forward fill does not create new information.</span
+              >
+            </div>
+          </section>
+          <section class="panel decision-panel">
+            <div class="section-head compact-head">
+              <div>
+                <div class="eyebrow">PAPER EXECUTION</div>
+                <h2>Paper decision & risk controls</h2>
+              </div>
+              <span class="label green-label" id="risk-label">PAPER ONLY</span>
+            </div>
+            <form id="paper-settings-form" class="paper-settings">
+              <h3>Try paper trading</h3>
+              <p>
+                Simulated $10,000 account. Choose your limits, then enable using a fresh forecast.
+                Demo values are editable before enabling.
+              </p>
+              <div class="paper-fields">
+                <label
+                  >Forecast change limit (percentage points)<input
+                    id="paper-swing"
+                    type="number"
+                    min="0.1"
+                    max="100"
+                    step="0.1"
+                    value="20"
+                    required
+                /></label>
+                <label
+                  >Loss limit (% of starting equity)<input
+                    id="paper-loss"
+                    type="number"
+                    min="0.1"
+                    max="100"
+                    step="0.1"
+                    value="10"
+                    required
+                /></label>
+                <label
+                  >BUY size (% of available cash)<input
+                    id="paper-buy-size"
+                    type="number"
+                    min="0.1"
+                    max="25"
+                    step="0.1"
+                    value="10"
+                    required
+                /></label>
+              </div>
+              <p id="paper-settings-summary">
+                Generate a forecast, then enable paper trading. Total BTC holdings remain capped at
+                25% of equity.
+              </p>
+              <button class="button primary" id="enable-paper" type="submit">
+                Enable paper trading
+              </button>
+              <div id="paper-feedback" role="status"></div>
+            </form>
+            <label class="paper-action-label" for="paper-action">Paper decision mode</label>
+            <select id="paper-action">
+              <option value="">Follow forecast</option>
+              <option value="BUY">Manual simulated BUY</option>
+              <option value="SELL">Manual simulated SELL</option>
+              <option value="HOLD">Manual simulated HOLD</option>
+            </select>
+            <button type="button" class="button paper-record" data-action="paper">
+              Record selected paper decision
+            </button>
+            <p class="paper-help">
+              Record the selected action above. One decision per forecast; generate a new forecast
+              for the next decision. SELL closes the simulated BTC position. Limits stay fixed for
+              this account; a triggered breaker stays paused across restarts.
+            </p>
+            <div class="decision-hero">
+              <span class="decision-icon"
+                ><svg><use href="#i-shield" /></svg
+              ></span>
+              <div>
+                <strong id="decision-action">Ready when you are</strong
+                ><span id="decision-reason"
+                  >Generate a forecast, then record a guarded paper decision.</span
+                >
+              </div>
+            </div>
+            <div class="risk-checks">
+              <div><span>Position limit</span><strong>25% of equity</strong></div>
+              <div>
+                <span>Circuit breaker</span><strong id="breaker-state">Not configured</strong>
+              </div>
+              <div><span>Execution costs</span><strong>0.10% fee + 5 bps slip</strong></div>
+              <div>
+                <span>Displayed forecast: 20% agent influence cap</span
+                ><strong id="cap-state">Requires ≥ 5 active</strong>
+              </div>
+            </div>
+            <details class="audit-details">
+              <summary>Inspect paper ledger & decision</summary>
+              <pre id="decision">No recorded decision yet.</pre>
+            </details>
+            <details class="audit-details">
+              <summary>Forecast contract, weights & Gemini debate</summary>
+              <pre id="contract">Generate a forecast to inspect its event definition.</pre>
+            </details>
+          </section>
+        </div>
+        <section class="panel section research-panel" id="research">
+          <div class="section-head">
+            <div>
+              <div class="eyebrow">REPLAY LAB</div>
+              <h2>See the decisions. Reveal the outcomes.</h2>
+              <p>Compare completed historical forecasts without waiting for tomorrow.</p>
+            </div>
+            <div class="replay-actions">
+              <button class="button small" data-action="archive-replay">
+                Settle saved live forecasts</button
+              ><button class="button small" data-action="real-replay">
+                <svg><use href="#i-flask" /></svg> Replay real BTC history</button
+              ><button class="button small subtle" data-action="replay">
+                Synthetic walkthrough
+              </button>
+            </div>
+          </div>
+          <div id="replay-badge" class="replay-mode">
+            NO REPLAY RUN YET
+            <span
+              >Real history uses available price agents. Synthetic runs are labelled
+              separately.</span
+            >
+          </div>
+          <div class="replay-chart-wrap">
+            <canvas id="replay-chart" aria-label="Historical forecast method comparison"></canvas>
+            <div id="replay-empty" class="replay-empty">
+              Your method comparison will appear here
+            </div>
+          </div>
+          <div class="replay-legend">
+            <span><i class="method-dot exchange"></i>Agent Exchange</span
+            ><span><i class="method-dot average"></i>Simple average</span
+            ><span><i class="method-dot vote"></i>Majority vote</span
+            ><span class="mini-muted">Probability of up · completed days</span>
+          </div>
+          <div id="replay-results" class="replay-results"></div>
+          <details class="audit-details research-details" open>
+            <summary>Agent coins &amp; influence</summary>
+            <h3>Live ledger</h3>
+            <p id="live-coin-status">Live balances are available in the dashboard.</p>
+            <div class="table-scroll">
+              <table class="agent-table">
+                <thead>
+                  <tr>
+                    <th>Agent</th>
+                    <th>Balance</th>
+                    <th>Latest settlement gain / loss</th>
+                    <th>Latest forecast weight</th>
+                    <th>Participation</th>
+                  </tr>
+                </thead>
+                <tbody id="live-coin-rows"></tbody>
+              </table>
+            </div>
+            <h3>Historical replay</h3>
+            <p id="replay-coin-status">Run a replay to see each agent's balance and influence.</p>
+            <div id="replay-coin-history" hidden>
+              <label for="replay-coin-date">Replay day (UTC)</label>
+              <select id="replay-coin-date"></select>
+              <div class="table-scroll">
+                <table class="agent-table">
+                  <thead>
+                    <tr>
+                      <th>Agent</th>
+                      <th>Opening coins</th>
+                      <th>Gain / loss</th>
+                      <th>Closing coins</th>
+                      <th>Forecast weight</th>
+                      <th>Participation</th>
+                    </tr>
+                  </thead>
+                  <tbody id="replay-coin-rows"></tbody>
+                </table>
+              </div>
+            </div>
+          </details>
+          <details class="audit-details research-details">
+            <summary>Inspect full research outputs & baseline results</summary>
+            <pre id="replay">Choose a replay above to begin.</pre>
+          </details>
+        </section>
+        <footer>
+          <span class="footer-brand">Agent<span>Exchange</span></span
+          ><span
+            >Experimental multi-agent research · uncalibrated probabilities · paper trading
+            only</span
+          ><a href="#overview">Back to overview ↑</a>
+        </footer>
+      </main>
     </div>
-  </div>
-</details><details class="audit-details research-details"><summary>Inspect full research outputs & baseline results</summary><pre id="replay">Choose a replay above to begin.</pre></details></section>
-<footer><span class="footer-brand">Agent<span>Exchange</span></span><span>Experimental multi-agent research · uncalibrated probabilities · paper trading only</span><a href="#overview">Back to overview ↑</a></footer>
-</main></div>
-<dialog id="key-dialog" aria-labelledby="key-title"><form id="key-form" method="dialog" autocomplete="off"><div class="dialog-heading"><div class="dialog-icon"><svg><use href="#i-key"/></svg></div><button type="button" class="icon-button" data-close-dialog aria-label="Close Gemini settings"><svg><use href="#i-close"/></svg></button></div><div class="eyebrow">MODEL CONNECTION</div><h2 id="key-title">Connect Gemini</h2><p>Use News, Mood and the Bull / Bear / Judge comparison with your own Gemini API key.</p><div id="key-current" class="key-current">No key configured</div><label class="field-label" for="gemini-key">Gemini API key</label><input type="password" id="gemini-key" name="gemini-session-key" placeholder="Paste your key here" autocomplete="off" spellcheck="false" autocapitalize="off" data-1p-ignore data-lpignore="true"><div class="key-privacy"><svg><use href="#i-shield"/></svg><span>Kept only in this local server's memory. Never written to files, browser storage, forecasts or GitHub. Sent to Google only when you request a Gemini forecast or debate.</span></div><div id="key-feedback" role="status" class="key-feedback"></div><div class="dialog-buttons"><button type="button" class="button subtle" id="clear-key">Clear session key</button><button type="submit" class="button primary" id="save-key">Use for this session <span>↗</span></button></div><p class="dialog-fineprint">Configuration does not verify the key. Google checks it on your next model request. Restarting the server clears the session key; an existing environment key can still be used.</p></form></dialog>
-<dialog id="evidence-dialog" aria-labelledby="evidence-title"><div class="dialog-heading"><span class="label blue-label">SPECIALIST REPORT</span><button class="icon-button" data-close-dialog aria-label="Close specialist report"><svg><use href="#i-close"/></svg></button></div><h2 id="evidence-title">Agent evidence</h2><div id="evidence-body"></div></dialog>
-<div class="toast" id="toast" role="status" hidden></div>
-</body></html>
+    <dialog id="key-dialog" aria-labelledby="key-title">
+      <form id="key-form" method="dialog" autocomplete="off">
+        <div class="dialog-heading">
+          <div class="dialog-icon">
+            <svg><use href="#i-key" /></svg>
+          </div>
+          <button
+            type="button"
+            class="icon-button"
+            data-close-dialog
+            aria-label="Close Gemini settings"
+          >
+            <svg><use href="#i-close" /></svg>
+          </button>
+        </div>
+        <div class="eyebrow">MODEL CONNECTION</div>
+        <h2 id="key-title">Connect Gemini</h2>
+        <p>Use News, Mood and the Bull / Bear / Judge comparison with your own Gemini API key.</p>
+        <div id="key-current" class="key-current">No key configured</div>
+        <label class="field-label" for="gemini-key">Gemini API key</label
+        ><input
+          type="password"
+          id="gemini-key"
+          name="gemini-session-key"
+          placeholder="Paste your key here"
+          autocomplete="off"
+          spellcheck="false"
+          autocapitalize="off"
+          data-1p-ignore
+          data-lpignore="true"
+        />
+        <div class="key-privacy">
+          <svg><use href="#i-shield" /></svg
+          ><span
+            >Kept only in this local server's memory. Never written to files, browser storage,
+            forecasts or GitHub. Sent to Google only when you request a Gemini forecast or
+            debate.</span
+          >
+        </div>
+        <div id="key-feedback" role="status" class="key-feedback"></div>
+        <div class="dialog-buttons">
+          <button type="button" class="button subtle" id="clear-key">Clear session key</button
+          ><button type="submit" class="button primary" id="save-key">
+            Use for this session <span>↗</span>
+          </button>
+        </div>
+        <p class="dialog-fineprint">
+          Configuration does not verify the key. Google checks it on your next model request.
+          Restarting the server clears the session key; an existing environment key can still be
+          used.
+        </p>
+      </form>
+    </dialog>
+    <dialog id="evidence-dialog" aria-labelledby="evidence-title">
+      <div class="dialog-heading">
+        <span class="label blue-label">SPECIALIST REPORT</span
+        ><button class="icon-button" data-close-dialog aria-label="Close specialist report">
+          <svg><use href="#i-close" /></svg>
+        </button>
+      </div>
+      <h2 id="evidence-title">Agent evidence</h2>
+      <div id="evidence-body"></div>
+    </dialog>
+    <div class="toast" id="toast" role="status" hidden></div>
+  </body>
+</html>

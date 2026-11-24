@@ -4,15 +4,15 @@ from pathlib import Path
 from datetime import timedelta
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
 from tests.test_market_evidence_specialist import observation as old_observation, PRED as OLD_PRED, response
-from student2.agents.limitless_live import read_book_event
+from market_data.prediction_markets.limitless_live import read_book_event
 PRED=OLD_PRED+timedelta(hours=2)
 def observation():
     o=old_observation();o["raw_book_event"]["timestamp"]=PRED.isoformat()
     o["quote"]=read_book_event(o["raw_book_event"],o["market"],PRED)
     return o
-from student2.agents import market_price_context as price
-from student2.agents import market_evidence_with_prices as enriched
-from student2.agents.betting_odds_specialist import _rules
+from market_data.prediction_markets import market_price_context as price
+from agents.specialists import market_evidence_with_prices as enriched
+from agents.specialists.betting_odds_specialist import _rules
 
 def context():
     ms=int(PRED.timestamp()*1000);end=ms//3600000*3600000

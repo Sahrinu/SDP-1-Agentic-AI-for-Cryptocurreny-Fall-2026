@@ -11,9 +11,9 @@ from urllib.error import URLError
 
 import pytest
 
-from student2.agents import betting_odds_specialist as module
-from student2.agents.betting_odds_specialist import run_betting_odds_specialist
-from student2.agents.schemas import NewsSpecialistResult
+from agents.specialists import betting_odds_specialist as module
+from agents.specialists.betting_odds_specialist import run_betting_odds_specialist
+from agents.schemas import NewsSpecialistResult
 
 
 ROOT = Path(__file__).resolve().parents[1]

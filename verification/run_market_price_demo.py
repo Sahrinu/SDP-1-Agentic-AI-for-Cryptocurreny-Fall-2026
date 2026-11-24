@@ -23,7 +23,7 @@ def main():
     from market_data.prediction_markets.binance_raw_context import assemble
     from agents.specialists import market_evidence_specialist as model
     from agents.specialists import market_evidence_with_prices as enriched
-    from agents.adapters import Student2Adapter
+    from agents.adapters import SpecialistAdapter
     folder=root/'runs'/'price_context_demo'/uuid.uuid4().hex;folder.mkdir(parents=True)
     def ps(script,*args):subprocess.run(['powershell','-NoProfile','-ExecutionPolicy','Bypass','-File',str(root/script),*map(str,args)],cwd=root,check=True)
     try:
@@ -61,7 +61,7 @@ def main():
                 if attempts:raise RuntimeError('More than one model attempt is not permitted')
                 attempts+=1
                 return model.gemini_call(a.model)(prompt)
-            adapter=Student2Adapter('betting_odds',model_client=one_call)
+            adapter=SpecialistAdapter('betting_odds',model_client=one_call)
             data={'student2_forecast':{k:metadata[k] for k in ('prediction_time','target_time','price_source','reference_price_definition','tie_definition')},
                   'student2_market_observation':report,'student2_markets_observed_at':report['finished_at_utc'],
                   'student2_price_context':assembled}

@@ -2,7 +2,9 @@ from pathlib import Path
 import inspect
 import sys
 
-from student2.agents import mood_specialist, news_specialist, schemas
+from agents.specialists import mood_specialist
+from agents.specialists import news_specialist
+from agents import schemas
 
 
 def test_specialists_and_schemas_are_loaded_from_the_team_repository():

@@ -18,38 +18,20 @@ specialists = [
     "python-dotenv>=1.1,<2", "yfinance>=1.8,<2", "tzdata>=2025.2",
 ]
 live = ["python-socketio[client]>=5,<6", "websocket-client>=1.8,<2", "truststore>=0.10,<1"]
-student4-integration = ["pandas>=2,<4"]
-# Legacy extras remain accepted; the shared project uses Python 3.11+.
-student2 = [
-    "pydantic>=2.14,<3",
-    "google-genai>=3,<4",
-    "langchain-core>=1.7,<2",
-    "python-dotenv>=1.1,<2",
-    "yfinance>=1.8,<2",
-    "tzdata>=2025.2",
-]
-student2-test = ["pytest>=9,<10"]
-student2-live = ["python-socketio[client]>=5,<6", "websocket-client>=1.8,<2", "truststore>=0.10,<1"]
-student2-google = ["langchain-google-genai>=4.4,<5"]
-student2-anthropic = ["langchain-anthropic"]
-student2-openai = ["langchain-openai"]
-student2-aws = ["langchain-aws"]
+# Optional SDK integrations; the dashboard's lightweight provider clients use specialists.
+google-client = ["langchain-google-genai>=4.4,<5"]
+anthropic-client = ["langchain-anthropic"]
+openai-client = ["langchain-openai"]
+bedrock-client = ["langchain-aws"]
 
 [tool.setuptools]
-license-files = ["licenses/pharos-MIT.txt"]
-
-[tool.setuptools.package-dir]
-student2 = "compat/student2"
-student4 = "compat/student4"
-crypto_trading = "compat/crypto_trading"
-tradingagents = "compat/tradingagents"
-macro = "compat/macro"
+license-files = ["LICENSE", "licenses/pharos-MIT.txt"]
 
 [tool.setuptools.packages.find]
-where = [".", "compat"]
-exclude = ["compat*", "build*"]
-include = ["verification*", "dashboard*", "agents*", "market_data*", "features*", "model_clients*", "exchange*", "risk*", "execution*", "experiments*", "crypto_trading*", "student4*", "student2*", "macro*", "tradingagents*"]
-namespaces = true
+where = ["."]
+exclude = ["build*", "tests*", "examples*"]
+include = ["verification*", "dashboard*", "agents*", "market_data*", "features*", "model_clients*", "exchange*", "risk*", "execution*", "experiments*"]
+namespaces = false
 
 [tool.setuptools.package-data]
 dashboard = ["*.html", "*.css", "*.js"]
@@ -60,4 +42,8 @@ verification = ["*.ps1"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = [".", "compat"]
+pythonpath = ["."]
+
+[tool.black]
+line-length = 100
+target-version = ["py311"]

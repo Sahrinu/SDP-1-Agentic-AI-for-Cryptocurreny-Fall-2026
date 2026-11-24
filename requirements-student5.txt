@@ -1,4 +1,0 @@
-# Install from the repository root: python -m pip install -r requirements-student5.txt
-pandas>=2.2,<4
-yfinance>=0.2.66,<2
-pytest>=8,<10

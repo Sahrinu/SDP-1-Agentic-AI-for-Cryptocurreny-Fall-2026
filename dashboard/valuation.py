@@ -1,10 +1,12 @@
 """One read-only market quote per minute; valuation never authorizes an order."""
+
 from datetime import datetime, timezone
 import threading
 
 
 def _quote():
     from market_data.live import reference_quote
+
     return reference_quote()
 
 
@@ -13,7 +15,7 @@ class PortfolioValuation:
         self.store = store
         self.get_quote = get_quote
         self.interval = interval
-        self.clock = clock or (lambda:datetime.now(timezone.utc))
+        self.clock = clock or (lambda: datetime.now(timezone.utc))
         self._lock = threading.Lock()
         self._fetch_lock = threading.Lock()
         self._stop = threading.Event()
@@ -46,18 +48,26 @@ class PortfolioValuation:
     def snapshot(self):
         with self._lock:
             value = self.store.value(now=self.clock())
-            age = value['price_age_seconds']
-            status = ('unavailable' if self._error else 'waiting') if age is None else (
-                'stale' if self._error or age > 180 else 'live')
-            return dict(value, status=status, last_attempt=self._last_attempt,
-                        refresh_seconds=self.interval, error=self._error,
-                        price_basis='Binance completed one-minute BTC/USDT close; paper USD assumes 1 USDT = 1 USD')
+            age = value["price_age_seconds"]
+            status = (
+                ("unavailable" if self._error else "waiting")
+                if age is None
+                else ("stale" if self._error or age > 180 else "live")
+            )
+            return dict(
+                value,
+                status=status,
+                last_attempt=self._last_attempt,
+                refresh_seconds=self.interval,
+                error=self._error,
+                price_basis="Binance completed one-minute BTC/USDT close; paper USD assumes 1 USDT = 1 USD",
+            )
 
     def start(self):
         if self._thread is not None:
             return
         self._stop.clear()
-        self._thread = threading.Thread(target=self._run, name='paper-valuation', daemon=True)
+        self._thread = threading.Thread(target=self._run, name="paper-valuation", daemon=True)
         self._thread.start()
 
     def _run(self):

@@ -10,12 +10,12 @@ from pathlib import Path
 from unittest.mock import patch
 
 from tests.test_limitless_live_reader import NOW, frame, market
-from student2.agents import limitless_live as live
-from student2.agents import limitless_targeted_discovery as discovery
-from student2.agents import binance_raw_context
-from student2.agents import market_evidence_specialist as evidence
-from student2.agents import market_evidence_with_prices as enriched
-from student2.verification import run_market_price_demo as demo
+from market_data.prediction_markets import limitless_live as live
+from market_data.prediction_markets import limitless_targeted_discovery as discovery
+from market_data.prediction_markets import binance_raw_context
+from agents.specialists import market_evidence_specialist as evidence
+from agents.specialists import market_evidence_with_prices as enriched
+from verification import run_market_price_demo as demo
 
 
 class Clock(live.datetime):

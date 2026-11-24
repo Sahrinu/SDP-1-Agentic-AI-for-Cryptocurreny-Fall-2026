@@ -2,7 +2,7 @@
 import unittest,json,copy,sys
 from pathlib import Path
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
-from student2.agents.market_price_context import decode_rows
+from market_data.prediction_markets.market_price_context import decode_rows
 
 class JsonTransportTests(unittest.TestCase):
     def test_native_trade(self):

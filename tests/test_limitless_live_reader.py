@@ -13,8 +13,8 @@ from urllib.error import HTTPError
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
-from student2.agents import limitless_live as live
-from student2.agents import betting_odds_specialist as odds
+from market_data.prediction_markets import limitless_live as live
+from agents.specialists import betting_odds_specialist as odds
 
 NOW = datetime(2026, 11, 13, 16, 59, 45, tzinfo=timezone.utc)
 

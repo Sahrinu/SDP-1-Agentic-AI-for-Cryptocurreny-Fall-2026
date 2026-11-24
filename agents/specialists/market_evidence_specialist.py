@@ -331,7 +331,7 @@ def forecast_from_market_evidence(observation, *, prediction_time, target_time,
 class MarketEvidenceAdapter:
     """Explicit alternative registration; does not remove the strict-odds guard.
 
-    Use with the runner's student2_adapters, student2_inputs and caller-attested
+    Use with the runner's specialist_adapters, specialist_inputs and caller-attested
     CSV settlement metadata. A model_call must be explicitly supplied.
     """
     AGENT_NAME = NAME

@@ -142,7 +142,7 @@ class RunnerTests(unittest.TestCase):
 
     def test_contract_exact_match(self):
         snapshot, settlement = configuration()
-        self.assertIsNone(runner.student2_window_error(DAY, NEXT, snapshot, settlement))
+        self.assertIsNone(runner.specialist_window_error(DAY, NEXT, snapshot, settlement))
 
     def test_contract_mismatches_rejected(self):
         for field, value in [('target_time', '2026-11-08T18:00:00Z'),
@@ -151,16 +151,16 @@ class RunnerTests(unittest.TestCase):
                              ('tie_definition', 'split')]:
             snapshot, settlement = configuration()
             snapshot['student2_forecast'][field] = value
-            self.assertIsNotNone(runner.student2_window_error(DAY, NEXT, snapshot, settlement))
+            self.assertIsNotNone(runner.specialist_window_error(DAY, NEXT, snapshot, settlement))
         snapshot, settlement = configuration()
-        self.assertIsNotNone(runner.student2_window_error(DAY, pd.Timestamp('2026-11-09'), snapshot, settlement))
-        self.assertIsNotNone(runner.student2_window_error(DAY, NEXT, {}, {}))
+        self.assertIsNotNone(runner.specialist_window_error(DAY, pd.Timestamp('2026-11-09'), snapshot, settlement))
+        self.assertIsNotNone(runner.specialist_window_error(DAY, NEXT, {}, {}))
 
     def test_mismatch_prevents_specialist_call(self):
         def forbidden(*a):
             self.fail('Specialist must not run with an undefined settlement contract')
         results, _, _, _ = self.run_case({'legacy': agent(.6)},
-            student2_adapters={'News Specialist': SimpleNamespace(forecast=forbidden)})
+            specialist_adapters={'News Specialist': SimpleNamespace(forecast=forbidden)})
         self.assertTrue(pd.isna(results.iloc[0]['p_News Specialist']))
         self.assertEqual(results.iloc[0]['average'], .6)
 
@@ -173,14 +173,14 @@ class RunnerTests(unittest.TestCase):
             seen.append(view['student2_news_articles'])
             self.assertIsInstance(view['btc_prices'], pd.DataFrame)
             return {'p_up': .7}
-        results, _, _, _ = self.run_case({}, student2_adapters={'News Specialist': SimpleNamespace(forecast=forecast)},
-            student2_inputs={'2026-11-07': snapshot}, settlement_contract=settlement)
+        results, _, _, _ = self.run_case({}, specialist_adapters={'News Specialist': SimpleNamespace(forecast=forecast)},
+            specialist_inputs={'2026-11-07': snapshot}, settlement_contract=settlement)
         self.assertEqual(results.iloc[0]['average'], .7)
         self.assertEqual(len(seen), 1)
 
     def test_duplicate_agent_names_rejected(self):
         with self.assertRaises(ValueError):
-            self.run_case({'same': agent(.5)}, student2_adapters={'same': agent(.6)})
+            self.run_case({'same': agent(.5)}, specialist_adapters={'same': agent(.6)})
 
     def test_student2_betting_remains_unavailable_even_with_matching_configuration(self):
         snapshot, settlement = configuration()
@@ -195,8 +195,8 @@ class RunnerTests(unittest.TestCase):
         ):
             with self.subTest(name=name):
                 results, coins, _, summary = self.run_case(
-                    {'legacy': agent(.6)}, 1, student2_adapters={name: adapter},
-                    student2_inputs={'2026-11-07': snapshot}, settlement_contract=settlement,
+                    {'legacy': agent(.6)}, 1, specialist_adapters={name: adapter},
+                    specialist_inputs={'2026-11-07': snapshot}, settlement_contract=settlement,
                 )
                 self.assertTrue(pd.isna(results.iloc[0]['p_' + name]))
                 self.assertEqual(results.iloc[0]['average'], .6)

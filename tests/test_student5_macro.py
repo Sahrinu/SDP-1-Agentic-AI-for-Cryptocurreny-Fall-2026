@@ -5,8 +5,8 @@ import json
 import pandas as pd
 import pytest
 
-from agents.world_econompy import forecast
-from macro.collect import align_daily, collect
+from agents.world_economy import forecast
+from market_data.macro import align_daily, collect
 
 
 @pytest.fixture

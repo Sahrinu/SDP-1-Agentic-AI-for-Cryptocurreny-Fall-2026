@@ -5,13 +5,7 @@ from datetime import datetime, timezone
 
 import pytest
 
-from student2.agents.news_specialist import (
-    NewsSpecialistResult,
-    build_gemini_prompt,
-    filter_articles_for_prediction,
-    run_news_specialist,
-    validate_news_specialist_result,
-)
+from agents.specialists.news_specialist import NewsSpecialistResult, build_gemini_prompt, filter_articles_for_prediction, run_news_specialist, validate_news_specialist_result
 
 
 SAMPLE_ARTICLES = [

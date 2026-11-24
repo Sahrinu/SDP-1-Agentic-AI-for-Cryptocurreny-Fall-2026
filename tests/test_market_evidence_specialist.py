@@ -10,7 +10,7 @@ sys.path.insert(0,str(ROOT))
 # Reuse the reader's synthetic test factories, never archived live predictions.
 spec=importlib.util.spec_from_file_location('book_test_inputs',Path(__file__).with_name('test_limitless_live_reader.py'))
 fixtures=importlib.util.module_from_spec(spec);spec.loader.exec_module(fixtures)
-from student2.agents import market_evidence_specialist as model
+from agents.specialists import market_evidence_specialist as model
 
 PRED=fixtures.NOW
 TARGET=PRED+timedelta(hours=24)

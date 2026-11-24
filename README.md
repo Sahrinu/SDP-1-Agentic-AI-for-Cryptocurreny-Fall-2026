@@ -50,7 +50,9 @@ Use `python -m dashboard --port 8766` if the default port is already in use.
 `GEMINI_API_KEY` is an alternative to `GOOGLE_API_KEY` for the dashboard and demo
 client. Optional model overrides are `GEMINI_MODEL`, `CLAUDE_MODEL`, and
 `OPENAI_MODEL`. The dashboard uses Gemini; adding Claude/OpenAI keys enables the
-separate experiments, not a dashboard provider switch.
+separate experiments, not a dashboard provider switch. Optional LangChain SDK
+integrations use extras `google-client`, `anthropic-client`, `openai-client`, and
+`bedrock-client`; install only the integration you use.
 
 Keep real credentials in your local `.env` or environment variables. `.env` is
 ignored by Git. Restart the dashboard after changing keys. Model calls can incur
@@ -69,8 +71,27 @@ API key does not guarantee that all 13 agents can contribute on every run.
 
 Forecasts target whether Binance BTCUSDT will be strictly higher 24 hours after
 the decision; ties count as down. Due forecasts settle on the next data refresh,
-forecast run, or explicit settlement action. Agent coins track forecast influence
-and are separate from cash or BTC balances.
+or forecast run. Agent coins track forecast influence and are separate from cash
+or BTC balances. **Settle saved live forecasts** builds a retrospective evaluation
+of saved forecasts whose outcomes are available.
+
+## Specialists
+
+The shared catalog is [`agents/registry.py`](agents/registry.py). Forecast logic and
+report-generating helpers have different roles; each specialist gets one entry
+in the ensemble.
+
+| Specialists | Main input or method |
+| --- | --- |
+| Chart, Crash, Long-term | Price trends, drawdowns, and historical patterns |
+| Borrowing | Futures funding and open interest |
+| Network, Miner | Activity, hash rate, and fee history |
+| Stablecoin | Peg stability and liquidity inputs |
+| ETF | Published ETF flows |
+| News, Mood | Timestamped news and sentiment with an explicit model client |
+| World economy | Dollar index and Treasury yields |
+| Betting odds | Validated prediction-market evidence |
+| Contrarian | Completed peer forecasts |
 
 ## Data connections
 
@@ -86,8 +107,15 @@ and are separate from cash or BTC balances.
 
 ETF refresh falls back to `data/etf_flows.csv` if the API is unavailable. Some
 stablecoin comparisons need observations approximately 24 hours apart. Prediction
-market participation requires a recent qualifying trade. Collection is triggered
-by the dashboard or CLI; there is no n8n integration.
+market participation requires a recent qualifying trade. Historical inputs and
+trained-model files in `data/` are saved research artifacts; they do not establish
+what was available at an earlier forecast time.
+
+The **Portfolio** panel values virtual cash and BTC about once a minute while the
+server runs, and saves its value history. Paper trading is opt-in: generate a
+fresh forecast, choose risk limits, then enable it. Recorded decisions pass the
+25% BTC-exposure cap and circuit breaker; valuation alone never places a trade.
+Paper USD values assume 1 USDT = 1 USD. These are separate from agent coins.
 
 ## Model-comparison experiments
 
@@ -114,10 +142,16 @@ forecast and attack sets when comparing providers.
 | `model_clients/` | Provider clients and structured-response parsing |
 | `exchange/` | Forecast aggregation, agent coins, and settlement ledger |
 | `risk/` | Forecast auditing and risk controls |
+| `execution/` | Simulated fills, fees, slippage, and trade accounting |
 | `experiments/` | Replays, attack tests, metrics, and result generation |
 | `tests/` | Offline tests and labeled fixtures |
 | `data/` | Reviewed inputs and cached datasets |
-| `compat/` | Forwarding modules for older import paths |
+
+Imports use these shared packages directly. For example, use
+`execution.paper_trading`, `agents.specialists.news_specialist`, and
+`market_data.macro`. Older student-specific package names are no longer shipped.
+All installation dependencies are maintained in `pyproject.toml`. Saved evidence
+keeps its existing `student2_*` JSON field names so archived experiments remain readable.
 
 Dashboard forecasts and captured inputs are saved under `outputs/dashboard/`.
 Generated `outputs/` files are ignored by Git. Historical examples remain in
@@ -134,7 +168,16 @@ python -m agents
 ```
 
 Offline tests validate code behavior, not live credentials or forecast accuracy.
-Synthetic fixtures and replays must remain labeled as synthetic.
+Synthetic fixtures and replays must remain labeled as synthetic. Some collector
+tests require PowerShell and are skipped when it is unavailable.
+
+For source formatting, install Black separately (`python -m pip install black`)
+and use Prettier via npm; neither is required to run the dashboard:
+
+```bash
+python -m black --check dashboard
+npx prettier@3.6.2 --check dashboard/app.js dashboard/index.html dashboard/styles.css
+```
 
 ## Attribution
 
