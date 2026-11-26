@@ -1,0 +1,143 @@
+{
+ "name": "may-2021",
+ "label": null,
+ "days": 57,
+ "start": "2021-04-15",
+ "end": "2021-06-10",
+ "btc_change_pct": -40.89298318333856,
+ "max_drawdown_pct": -47.14879580392521,
+ "up_days": 23,
+ "mean_active_agents": 9.0,
+ "brier": {
+  "exchange": 0.24846436488964949,
+  "vote": 0.28399122807017546,
+  "average": 0.24846253097300758,
+  "constant_50": 0.25
+ },
+ "exchange_direction_hits": 26,
+ "always_down_hits": 34,
+ "mean_exchange": 0.4789867222372236,
+ "big_down_days": [
+  {
+   "day": "2021-04-17",
+   "change_pct": -6.427036598937519,
+   "exchange": 0.47979574030593536,
+   "vote": 0.5
+  },
+  {
+   "day": "2021-05-03",
+   "change_pct": -6.943191102791191,
+   "exchange": 0.5014248997006215,
+   "vote": 0.625
+  },
+  {
+   "day": "2021-05-11",
+   "change_pct": -12.420500292747382,
+   "exchange": 0.5050072361062471,
+   "vote": 0.75
+  },
+  {
+   "day": "2021-05-14",
+   "change_pct": -6.176505699573342,
+   "exchange": 0.4689867516499507,
+   "vote": 0.375
+  },
+  {
+   "day": "2021-05-16",
+   "change_pct": -6.231674617447203,
+   "exchange": 0.45529357999946607,
+   "vote": 0.25
+  },
+  {
+   "day": "2021-05-18",
+   "change_pct": -14.375079638681932,
+   "exchange": 0.45095747644042306,
+   "vote": 0.375
+  },
+  {
+   "day": "2021-05-20",
+   "change_pct": -8.080191202626219,
+   "exchange": 0.5035307187917403,
+   "vote": 0.75
+  },
+  {
+   "day": "2021-05-22",
+   "change_pct": -7.461949658916112,
+   "exchange": 0.4841565601051361,
+   "vote": 0.5
+  },
+  {
+   "day": "2021-05-27",
+   "change_pct": -7.439635317744797,
+   "exchange": 0.460976490726581,
+   "vote": 0.375
+  },
+  {
+   "day": "2021-06-03",
+   "change_pct": -6.160478347401154,
+   "exchange": 0.5093453794302752,
+   "vote": 0.625
+  },
+  {
+   "day": "2021-06-06",
+   "change_pct": -6.2674616461864225,
+   "exchange": 0.44725229132943845,
+   "vote": 0.25
+  }
+ ],
+ "mean_exchange_before_big_drops": 0.4787933749623468,
+ "boss_paper": {
+  "final_equity": 10000.0,
+  "return_pct": 0.0,
+  "trades": 0,
+  "buy_and_hold_pct": -40.89298318333856
+ },
+ "boss_paper_sensitivity": {
+  "final_equity": 10000.0,
+  "return_pct": 0.0,
+  "trades": 0,
+  "buy_and_hold_pct": -40.89298318333856,
+  "buy_at": 0.52,
+  "sell_at": 0.46,
+  "note": "Thresholds chosen after seeing the Exchange's range; sensitivity only, not the live rule."
+ },
+ "agent_hit_rates": {
+  "Borrowing": {
+   "right": 34,
+   "calls": 57
+  },
+  "Chart": {
+   "right": 29,
+   "calls": 57
+  },
+  "Crash": {
+   "right": 34,
+   "calls": 57
+  },
+  "Long-term": {
+   "right": 23,
+   "calls": 57
+  },
+  "Miner": {
+   "right": 23,
+   "calls": 57
+  },
+  "Network": {
+   "right": 31,
+   "calls": 57
+  },
+  "Stablecoin": {
+   "right": 23,
+   "calls": 57
+  },
+  "World economy": {
+   "right": 25,
+   "calls": 57
+  }
+ },
+ "stablecoin_walk_forward": {
+  "liquidity_train_end": "2021-04-14",
+  "depeg": "not retrained (ValueError; 0 rows before the window)"
+ },
+ "mood_llm": true
+}

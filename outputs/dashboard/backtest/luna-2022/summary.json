@@ -1,0 +1,145 @@
+{
+ "name": "luna-2022",
+ "label": null,
+ "days": 62,
+ "start": "2022-04-25",
+ "end": "2022-06-25",
+ "btc_change_pct": -47.95916398522934,
+ "max_drawdown_pct": -53.072892548572604,
+ "up_days": 29,
+ "mean_active_agents": 10.935483870967742,
+ "brier": {
+  "exchange": 0.2493396924645425,
+  "vote": 0.26059139784946234,
+  "average": 0.24917413670819324,
+  "constant_50": 0.25
+ },
+ "exchange_direction_hits": 32,
+ "always_down_hits": 33,
+ "mean_exchange": 0.4742262422438642,
+ "big_down_days": [
+  {
+   "day": "2022-04-25",
+   "change_pct": -5.722617676509822,
+   "exchange": 0.4771985454545455,
+   "vote": 0.4
+  },
+  {
+   "day": "2022-05-04",
+   "change_pct": -7.9038296800201575,
+   "exchange": 0.48956116911517,
+   "vote": 0.5
+  },
+  {
+   "day": "2022-05-08",
+   "change_pct": -11.640059462254392,
+   "exchange": 0.4420864046719792,
+   "vote": 0.2
+  },
+  {
+   "day": "2022-05-10",
+   "change_pct": -6.168081477636534,
+   "exchange": 0.4617065629923332,
+   "vote": 0.4
+  },
+  {
+   "day": "2022-05-17",
+   "change_pct": -5.681110122440747,
+   "exchange": 0.4825370363905519,
+   "vote": 0.5
+  },
+  {
+   "day": "2022-05-31",
+   "change_pct": -6.274040094286226,
+   "exchange": 0.4956083629861512,
+   "vote": 0.6
+  },
+  {
+   "day": "2022-06-11",
+   "change_pct": -6.509022082906779,
+   "exchange": 0.4581076045151236,
+   "vote": 0.3
+  },
+  {
+   "day": "2022-06-12",
+   "change_pct": -15.379839267147899,
+   "exchange": 0.4424262478410752,
+   "vote": 0.3
+  },
+  {
+   "day": "2022-06-15",
+   "change_pct": -9.663642659402438,
+   "exchange": 0.470435557374641,
+   "vote": 0.4
+  },
+  {
+   "day": "2022-06-17",
+   "change_pct": -7.318549539518903,
+   "exchange": 0.46177792107445115,
+   "vote": 0.3333333333333333
+  }
+ ],
+ "mean_exchange_before_big_drops": 0.4681445412416022,
+ "boss_paper": {
+  "final_equity": 10000.0,
+  "return_pct": 0.0,
+  "trades": 0,
+  "buy_and_hold_pct": -47.95916398522934
+ },
+ "boss_paper_sensitivity": {
+  "final_equity": 10000.0,
+  "return_pct": 0.0,
+  "trades": 0,
+  "buy_and_hold_pct": -47.95916398522934,
+  "buy_at": 0.52,
+  "sell_at": 0.46,
+  "note": "Thresholds chosen after seeing the Exchange's range; sensitivity only, not the live rule."
+ },
+ "agent_hit_rates": {
+  "Borrowing": {
+   "right": 33,
+   "calls": 62
+  },
+  "Chart": {
+   "right": 33,
+   "calls": 62
+  },
+  "Crash": {
+   "right": 33,
+   "calls": 62
+  },
+  "Long-term": {
+   "right": 26,
+   "calls": 59
+  },
+  "Miner": {
+   "right": 33,
+   "calls": 62
+  },
+  "Mood": {
+   "right": 37,
+   "calls": 62
+  },
+  "Network": {
+   "right": 28,
+   "calls": 62
+  },
+  "News": {
+   "right": 26,
+   "calls": 58
+  },
+  "Stablecoin": {
+   "right": 29,
+   "calls": 62
+  },
+  "World economy": {
+   "right": 35,
+   "calls": 62
+  }
+ },
+ "stablecoin_walk_forward": {
+  "liquidity_train_end": "2022-04-24",
+  "depeg": "not retrained (ValueError; 0 rows before the window)"
+ },
+ "mood_llm": true
+}

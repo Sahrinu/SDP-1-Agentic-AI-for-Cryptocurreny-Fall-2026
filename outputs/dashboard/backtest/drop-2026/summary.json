@@ -1,0 +1,99 @@
+{
+ "name": "drop-2026",
+ "label": null,
+ "days": 42,
+ "start": "2026-05-10",
+ "end": "2026-06-20",
+ "btc_change_pct": -22.98754884894272,
+ "max_drawdown_pct": -25.94019199837685,
+ "up_days": 14,
+ "mean_active_agents": 12.119047619047619,
+ "brier": {
+  "exchange": 0.2451934552633352,
+  "vote": 0.25036009445100355,
+  "average": 0.24531448074094928,
+  "constant_50": 0.25
+ },
+ "exchange_direction_hits": 24,
+ "always_down_hits": 28,
+ "mean_exchange": 0.4810701837426143,
+ "big_down_days": [
+  {
+   "day": "2026-06-01",
+   "change_pct": -6.509090603552203,
+   "exchange": 0.47319336530333955,
+   "vote": 0.2
+  }
+ ],
+ "mean_exchange_before_big_drops": 0.47319336530333955,
+ "boss_paper": {
+  "final_equity": 10000.0,
+  "return_pct": 0.0,
+  "trades": 0,
+  "buy_and_hold_pct": -22.98754884894272
+ },
+ "boss_paper_sensitivity": {
+  "final_equity": 10000.0,
+  "return_pct": 0.0,
+  "trades": 0,
+  "buy_and_hold_pct": -22.98754884894272,
+  "buy_at": 0.52,
+  "sell_at": 0.46,
+  "note": "Thresholds chosen after seeing the Exchange's range; sensitivity only, not the live rule."
+ },
+ "agent_hit_rates": {
+  "Betting odds": {
+   "right": 21,
+   "calls": 38
+  },
+  "Borrowing": {
+   "right": 26,
+   "calls": 42
+  },
+  "Chart": {
+   "right": 22,
+   "calls": 42
+  },
+  "Crash": {
+   "right": 27,
+   "calls": 41
+  },
+  "ETF": {
+   "right": 27,
+   "calls": 42
+  },
+  "Long-term": {
+   "right": 20,
+   "calls": 40
+  },
+  "Miner": {
+   "right": 26,
+   "calls": 42
+  },
+  "Mood": {
+   "right": 14,
+   "calls": 42
+  },
+  "Network": {
+   "right": 25,
+   "calls": 42
+  },
+  "News": {
+   "right": 2,
+   "calls": 8
+  },
+  "Stablecoin": {
+   "right": 19,
+   "calls": 42
+  },
+  "World economy": {
+   "right": 21,
+   "calls": 42
+  }
+ },
+ "stablecoin_walk_forward": {
+  "liquidity_train_end": "2026-05-09",
+  "depeg_train_end": "2026-05-08"
+ },
+ "mood_llm": true
+}

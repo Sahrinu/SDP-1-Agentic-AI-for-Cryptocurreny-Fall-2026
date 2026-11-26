@@ -1,0 +1,97 @@
+{
+ "name": "yen-2024",
+ "label": null,
+ "days": 42,
+ "start": "2024-07-15",
+ "end": "2024-08-25",
+ "btc_change_pct": -2.920301451668572,
+ "max_drawdown_pct": -20.851421277224237,
+ "up_days": 20,
+ "mean_active_agents": 11.0,
+ "brier": {
+  "exchange": 0.25039784397558823,
+  "vote": 0.27696355085243973,
+  "average": 0.2502913248558076,
+  "constant_50": 0.25
+ },
+ "exchange_direction_hits": 19,
+ "always_down_hits": 22,
+ "mean_exchange": 0.49538530153929144,
+ "big_down_days": [
+  {
+   "day": "2024-08-01",
+   "change_pct": -5.899698289408972,
+   "exchange": 0.5021827272978172,
+   "vote": 0.5
+  },
+  {
+   "day": "2024-08-04",
+   "change_pct": -7.121937380719046,
+   "exchange": 0.4626570564826325,
+   "vote": 0.2
+  }
+ ],
+ "mean_exchange_before_big_drops": 0.48241989189022483,
+ "boss_paper": {
+  "final_equity": 10000.0,
+  "return_pct": 0.0,
+  "trades": 0,
+  "buy_and_hold_pct": -2.920301451668572
+ },
+ "boss_paper_sensitivity": {
+  "final_equity": 9977.910225273108,
+  "return_pct": -0.2208977472689213,
+  "trades": 1,
+  "buy_and_hold_pct": -2.920301451668572,
+  "buy_at": 0.52,
+  "sell_at": 0.46,
+  "note": "Thresholds chosen after seeing the Exchange's range; sensitivity only, not the live rule."
+ },
+ "agent_hit_rates": {
+  "Borrowing": {
+   "right": 22,
+   "calls": 42
+  },
+  "Chart": {
+   "right": 20,
+   "calls": 42
+  },
+  "Crash": {
+   "right": 20,
+   "calls": 38
+  },
+  "ETF": {
+   "right": 23,
+   "calls": 42
+  },
+  "Long-term": {
+   "right": 16,
+   "calls": 38
+  },
+  "Miner": {
+   "right": 21,
+   "calls": 42
+  },
+  "Mood": {
+   "right": 26,
+   "calls": 42
+  },
+  "Network": {
+   "right": 20,
+   "calls": 42
+  },
+  "Stablecoin": {
+   "right": 20,
+   "calls": 42
+  },
+  "World economy": {
+   "right": 18,
+   "calls": 42
+  }
+ },
+ "stablecoin_walk_forward": {
+  "liquidity_train_end": "2024-07-14",
+  "depeg": "not retrained (ValueError; 0 rows before the window)"
+ },
+ "mood_llm": true
+}

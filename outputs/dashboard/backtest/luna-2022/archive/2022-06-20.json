@@ -1,0 +1,293 @@
+{
+ "forecast": {
+  "id": "backtest-luna-2022-2022-06-20",
+  "mode": "backtest",
+  "scenario": {
+   "name": "luna-2022",
+   "label": null
+  },
+  "events": {
+   "today": null,
+   "next_day": null,
+   "pinned": false
+  },
+  "created_at": "2022-06-21T00:00:00+00:00",
+  "decision_day": "2022-06-20",
+  "methods": {
+   "exchange": 0.45925441930556576,
+   "vote": 0.3,
+   "average": 0.45989163636363634
+  },
+  "cap_feasible": true,
+  "active_count": 11,
+  "weights": {
+   "borrowing": 0.1035375939493711,
+   "chart": 0.09654525563301715,
+   "crash": 0.09008781997363532,
+   "long_term": 0.07872391919851279,
+   "miner": 0.08174428274258962,
+   "network": 0.08509607662911686,
+   "stablecoin": 0.08716416521598357,
+   "world_economy": 0.10098509936958933,
+   "Mood Specialist": 0.09921133112298358,
+   "News Specialist": 0.08841160317864667,
+   "contrarian": 0.08849285298655396
+  },
+  "agents": [
+   {
+    "agent": "borrowing",
+    "role": "Borrowing",
+    "p_up": 0.459296,
+    "data_missing": false,
+    "evidence": [
+     "Source Bybit USDT perpetual BTCUSDT; history, public at 00:00 UTC next day; OI in BTC x Binance close as USD; observation 2022-06-20; available 2022-06-21T00:00:00+00:00",
+     "Three-day mean 8h funding 0.00002682; five-day OI change +3.1699%",
+     "Uncalibrated contrarian crowding rule; p_up 0.38\u20130.62; USDT OI is a USD proxy."
+    ]
+   },
+   {
+    "agent": "chart",
+    "role": "Chart",
+    "p_up": 0.380007,
+    "data_missing": false,
+    "evidence": [
+     "70 completed daily closes through 2022-06-20; EMA20 24879.39; EMA50 29006.41; MACD histogram -649.0311",
+     "Daily-only rule: intraday candles were not supplied for this replay or live forecast.",
+     "Uncalibrated trend/momentum probability adapter in [0.38,0.62]; separate from the descriptive Chart report."
+    ]
+   },
+   {
+    "agent": "contrarian",
+    "role": "Contrarian",
+    "p_up": 0.5,
+    "data_missing": false,
+    "evidence": [
+     "10 first-stage peers; up 3, down 7; directional agreement 70.0%; mean p_up 0.4559",
+     "Contrarian threshold not triggered; peer names: Mood Specialist, News Specialist, borrowing, chart, crash, long_term, miner, network, stablecoin, world_economy",
+     "Uncalibrated consensus-reversal heuristic; p_up 0.40\u20130.60. It reads no arguments or future outcomes."
+    ]
+   },
+   {
+    "agent": "crash",
+    "role": "Crash",
+    "p_up": 0.366805,
+    "data_missing": false,
+    "evidence": [
+     "91 completed daily closes through 2022-06-20; historical 5% return quantile -6.9947%",
+     "Latest daily return -0.0005%; 30-day peak drawdown -35.3043%",
+     "Uncalibrated downside-pressure rule, p_up 0.35\u20130.50. Historical extreme moves do not establish next-day crash probability."
+    ]
+   },
+   {
+    "agent": "etf",
+    "role": "ETF",
+    "p_up": null,
+    "data_missing": true,
+    "evidence": [
+     "US spot Bitcoin ETFs did not exist yet (they started trading on 11 Jan 2024)."
+    ],
+    "limitations": [
+     "US spot Bitcoin ETFs did not exist yet (they started trading on 11 Jan 2024)."
+    ]
+   },
+   {
+    "agent": "long_term",
+    "role": "Long-term",
+    "p_up": 0.514286,
+    "data_missing": false,
+    "evidence": [
+     "1096 completed daily closes through 2022-06-20; current log-price residual -1.08724",
+     "60 nearest previously observed residuals had 31 higher next closes; frequency shrunk with ten neutral pseudo-observations.",
+     "Each historical trend is fitted only through its own date; neighbour labels stop before the current forecast. Experimental daily adapter, not a validated power-law trading edge."
+    ]
+   },
+   {
+    "agent": "miner",
+    "role": "Miner",
+    "p_up": 0.46748,
+    "data_missing": false,
+    "evidence": [
+     "Source Coin Metrics community API; history, availability estimated as 06:00 UTC next day; latest miner day 2022-06-19; available 2022-06-20T06:00:00+00:00",
+     "Latest versus prior seven days: hash rate -2.41%, total fees -43.78%",
+     "Uncalibrated miner-health proxy in [0.42,0.58]; does not measure miners' actual BTC sales."
+    ]
+   },
+   {
+    "agent": "network",
+    "role": "Network",
+    "p_up": 0.401779,
+    "data_missing": false,
+    "evidence": [
+     "Source Coin Metrics community API; history, availability estimated as 06:00 UTC next day; latest network day 2022-06-19; available 2022-06-20T06:00:00+00:00",
+     "Latest versus prior seven days: active addresses -22.53%, transactions -24.61%",
+     "Uncalibrated usage heuristic in [0.40,0.60]; activity does not establish demand or next-day returns."
+    ]
+   },
+   {
+    "agent": "stablecoin",
+    "role": "Stablecoin",
+    "p_up": 0.511316,
+    "data_missing": false,
+    "evidence": [
+     "Liquidity 7-day view: P(BTC higher in 7d) = 55.7% (score -0.54; usdt_premium_ma3 -1.32, mint_after_dip -1.14, abnormal_issuance +1.06)",
+     "Weak, slow signal: 24h vote uses 20% of the 7-day view; walk-forward 5 years: rank IC positive in 3 (mean -0.01), pooled 7d Brier 0.260 vs coin flip 0.250"
+    ]
+   },
+   {
+    "agent": "world_economy",
+    "role": "World economy",
+    "p_up": 0.457839,
+    "data_missing": false,
+    "evidence": [
+     "dxy: 104.7; source date 2022-06-17; available at 2022-06-18T00:00:00+00:00; carried 3 calendar days; availability age 72.00 hours; availability basis assumed_next_UTC_midnight_not_verified_vintage; five-session change +0.5281 percent",
+     "treasury_10y: 3.239; source date 2022-06-17; available at 2022-06-18T00:00:00+00:00; carried 3 calendar days; availability age 72.00 hours; availability basis assumed_next_UTC_midnight_not_verified_vintage; five-session change +0.0830 percentage points",
+     "Uncalibrated heuristic: 60% dollar / 40% yield pressure; p_up limited to 0.40-0.60. Treasury yield is a market proxy, not the Fed policy rate.",
+     "Yahoo historical availability is assumed next UTC midnight; publication timestamps and historical vintages are not verified."
+    ]
+   },
+   {
+    "agent": "Mood Specialist",
+    "role": "Mood",
+    "p_up": 0.52,
+    "data_missing": false,
+    "evidence": [
+     "The Fear and Greed Index printed at 9 ('Extreme Fear') on June 20, rising slightly from consecutive historical lows of 6 over the preceding weekend. While persistent single-digit scores reflect acute macro distress and capitulation, slight upticks from extreme troughs often correlate with short-term",
+     "alternative-me-fng-2022-06-18T00:00:00Z",
+     "alternative-me-fng-2022-06-19T00:00:00Z",
+     "alternative-me-fng-2022-06-20T00:00:00Z"
+    ]
+   },
+   {
+    "agent": "News Specialist",
+    "role": "News",
+    "p_up": 0.48,
+    "data_missing": false,
+    "evidence": [
+     "News heading into June 21, 2022, reflects a fragile market undergoing a temporary relief rally following severe liquidation pressure, with Bitcoin attempting to reclaim support around $20,000. However, reporting highlights significant ongoing contagion risks, specifically warning of further pockets ",
+     "free_crypto_news-242707fa768c6b6b",
+     "free_crypto_news-492972de20e84834",
+     "free_crypto_news-4053785a8ede0a66",
+     "free_crypto_news-aaf32089875dfb55"
+    ]
+   },
+   {
+    "agent": "Betting Odds Specialist",
+    "role": "Betting odds",
+    "p_up": null,
+    "data_missing": true,
+    "evidence": [
+     "Backtest: no archive of past prediction-market order books exists, and reading today's markets about a past day would leak the future."
+    ],
+    "limitations": [
+     "Backtest: no archive of past prediction-market order books exists, and reading today's markets about a past day would leak the future."
+    ]
+   }
+  ],
+  "quote": {
+   "price": 20573.89,
+   "bar_close_time": "2022-06-21T00:00:00+00:00",
+   "source": "Binance BTCUSDT daily close"
+  },
+  "contract": {
+   "prediction_time": "2022-06-21T00:00:00+00:00",
+   "target_time": "2022-06-22T00:00:00+00:00",
+   "price_source": "binance:BTC/USDT daily close",
+   "tie_definition": "down"
+  },
+  "backtest": {
+   "rules": "* BTC daily closes: Binance spot, known at the candle close. Before Binance's first candle (17 Aug 2017)\n    the Long-term agent's lookback uses Coin Metrics daily reference prices; scoring always uses Binance.\n  * Network / Miner: Coin Metrics community history; availability estimated as 06:00 UTC next day\n    (the team's replay convention).\n  * Borrowing: funding settlements and the daily open-interest snapshot are public at 00:00 UTC next day.\n    Binance (the live source) keeps only ~25 days of open-interest history, so older scenarios use Bybit's\n    BTCUSDT perpetual instead (history from early 2021; open interest in BTC converted to USD with the\n    Binance close). 2018 and 2020 have no borrowing data.\n  * ETF: SoSoValue / Farside daily totals; availability estimated as 12:00 UTC next day.\n    US spot BTC ETFs started trading on 11 Jan 2024. History before late Oct 2026 comes from Farside's\n    all-data table copied by hand (outputs/dashboard/backtest/farside_all.csv); those values are the latest\n    revision, so early-reporting days may include later corrections.\n  * World economy: Yahoo daily closes of DXY and the 10-year yield, assumed available at 00:00 UTC\n    after the session (the macro module's own historical basis).\n  * Stablecoin: walk-forward. The liquidity model (and the peg-stress model when enough history exists)\n    is retrained on data dated before each scenario starts; the agent still refuses in-sample days.\n    Before DefiLlama's history starts (Nov 2019) the same columns come from Coin Metrics daily market caps\n    and prices (USDT, USDC, SAI/DAI, BTC).\n  * Mood (Gemini): Alternative.me Fear & Greed history; only readings timestamped strictly before the\n    decision time. Caveat: the language model may already know how some past periods played out from\n    its training data, so older Mood backtests can look better than they really are.\n  * News (Gemini): Bitcoin articles with text, published and last edited within the 36 hours before the\n    decision. Sources in order: Alpaca news (archive from spring 2026), Free Crypto News archive\n    (cryptocurrency.cv, publisher timestamps), then CoinDesk Data news only for days still short of\n    articles. Duplicates are merged and at most 20 recent articles are used. Same language-model caveat\n    as Mood; archive timestamps come from the providers and are not independently verified.\n    Replay variant: the team's News prompt calls every non-Yahoo article \"unverified\" (live it only reads\n    Yahoo). In this replay process only, that one sentence is replaced so archived articles are described\n    as genuine dated reporting from named publishers; the rest of the prompt and the agent are unchanged.\n  * Betting odds: replay of the team's unchanged Kalshi path (from Nov 2024, when Kalshi's daily BTC\n    markets exist). The observation is rebuilt from Kalshi's archived real trade in the next-fixing daily\n    market, using the agent's own 5-minute freshness rule (no trade in the last 5 minutes -> abstain).\n    The trade closest to 50% is chosen because archived order books (bid/ask) are not available. The\n    observation carries the live-capture mode label only so the unchanged validator accepts it; each\n    result states that it was reconstructed from the archive.",
+   "built_at": "2026-11-26T19:48:32.369872+00:00",
+   "stablecoin_walk_forward": {
+    "liquidity_train_end": "2022-04-24",
+    "depeg": "not retrained (ValueError; 0 rows before the window)"
+   }
+  }
+ },
+ "settlement": {
+  "settled": true,
+  "reference_price": 20573.89,
+  "target_price": 20723.52,
+  "went_up": 1,
+  "settled_at": "2022-06-22T00:00:00+00:00",
+  "target_time": "2022-06-22T00:00:00+00:00",
+  "bets": [
+   {
+    "agent": "borrowing",
+    "p_up": 0.459296,
+    "coins_before": 117.00108026249657,
+    "change": -0.9524823942009326,
+    "coins_after": 116.04859786829564
+   },
+   {
+    "agent": "chart",
+    "p_up": 0.380007,
+    "coins_before": 109.09949490235861,
+    "change": -2.618235138363744,
+    "coins_after": 106.48125976399487
+   },
+   {
+    "agent": "crash",
+    "p_up": 0.366805,
+    "coins_before": 101.80236813850233,
+    "change": -2.711913284841564,
+    "coins_after": 99.09045485366077
+   },
+   {
+    "agent": "long_term",
+    "p_up": 0.514286,
+    "coins_before": 88.96076523883175,
+    "change": 0.2541786984403905,
+    "coins_after": 89.21494393727214
+   },
+   {
+    "agent": "miner",
+    "p_up": 0.46748,
+    "coins_before": 92.37388103535349,
+    "change": -0.6007997222539391,
+    "coins_after": 91.77308131309955
+   },
+   {
+    "agent": "network",
+    "p_up": 0.401779,
+    "coins_before": 96.16152463978845,
+    "change": -1.8890162223289326,
+    "coins_after": 94.27250841745952
+   },
+   {
+    "agent": "stablecoin",
+    "p_up": 0.511316,
+    "coins_before": 98.49853663236252,
+    "change": 0.22292188810636274,
+    "coins_after": 98.72145852046887
+   },
+   {
+    "agent": "world_economy",
+    "p_up": 0.457839,
+    "coins_before": 114.1166726593542,
+    "change": -0.9622546071982067,
+    "coins_after": 113.15441805215599
+   },
+   {
+    "agent": "Mood Specialist",
+    "p_up": 0.52,
+    "coins_before": 112.11225288222793,
+    "change": 0.44844901152891214,
+    "coins_after": 112.56070189375684
+   },
+   {
+    "agent": "News Specialist",
+    "p_up": 0.48,
+    "coins_before": 99.90818489271712,
+    "change": -0.3996327395708688,
+    "coins_after": 99.50855215314625
+   },
+   {
+    "agent": "contrarian",
+    "p_up": 0.5,
+    "coins_before": 100.0,
+    "change": 0.0,
+    "coins_after": 100.0
+   }
+  ]
+ }
+}

@@ -19,4 +19,8 @@ date,net_flow_usd,available_at,complete,source,retrieved_at
 2026-11-17,-239900000.0,2026-11-21T13:33:28+00:00,True,"https://farside.co.uk/btc/ (US$m, copied by user from public table)",
 2026-11-18,-306500000.0,2026-11-21T13:33:28+00:00,True,"https://farside.co.uk/btc/ (US$m, copied by user from public table)",
 2026-11-19,-582300000.0,2026-11-21T13:33:28+00:00,True,"https://farside.co.uk/btc/ (US$m, copied by user from public table)",
+2026-11-20,-669162059.12,2026-11-21T12:00:00+00:00,True,"SoSoValue API etfs/summary-history (US BTC spot, total_net_inflow USD)",2026-11-26T15:10:44.680041+00:00
 2026-11-20,,2026-11-21T13:33:28+00:00,False,"https://farside.co.uk/btc/ (US$m, copied by user from public table)",
+2026-11-23,-569739636.2999997,2026-11-24T12:00:00+00:00,True,"SoSoValue API etfs/summary-history (US BTC spot, total_net_inflow USD)",2026-11-26T15:10:44.680041+00:00
+2026-11-24,-231556490.06999975,2026-11-25T12:00:00+00:00,True,"SoSoValue API etfs/summary-history (US BTC spot, total_net_inflow USD)",2026-11-26T15:10:44.680041+00:00
+2026-11-25,-453119620.9600002,2026-11-26T12:00:00+00:00,True,"SoSoValue API etfs/summary-history (US BTC spot, total_net_inflow USD)",2026-11-26T15:10:44.680041+00:00

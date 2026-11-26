@@ -1,0 +1,93 @@
+{
+ "name": "ftx-2022",
+ "label": null,
+ "days": 42,
+ "start": "2022-10-20",
+ "end": "2022-11-30",
+ "btc_change_pct": -10.84213146573455,
+ "max_drawdown_pct": -25.90724514387045,
+ "up_days": 20,
+ "mean_active_agents": 10.0,
+ "brier": {
+  "exchange": 0.25233795140012777,
+  "vote": 0.27821410199882424,
+  "average": 0.2523881580407793,
+  "constant_50": 0.25
+ },
+ "exchange_direction_hits": 17,
+ "always_down_hits": 22,
+ "mean_exchange": 0.49022987751798247,
+ "big_down_days": [
+  {
+   "day": "2022-11-07",
+   "change_pct": -9.926118673428807,
+   "exchange": 0.4752245541056326,
+   "vote": 0.3333333333333333
+  },
+  {
+   "day": "2022-11-08",
+   "change_pct": -14.149929666047168,
+   "exchange": 0.4700154717549652,
+   "vote": 0.2222222222222222
+  }
+ ],
+ "mean_exchange_before_big_drops": 0.47262001293029887,
+ "boss_paper": {
+  "final_equity": 10000.0,
+  "return_pct": 0.0,
+  "trades": 0,
+  "buy_and_hold_pct": -10.84213146573455
+ },
+ "boss_paper_sensitivity": {
+  "final_equity": 9668.426540067147,
+  "return_pct": -3.315734599328536,
+  "trades": 2,
+  "buy_and_hold_pct": -10.84213146573455,
+  "buy_at": 0.52,
+  "sell_at": 0.46,
+  "note": "Thresholds chosen after seeing the Exchange's range; sensitivity only, not the live rule."
+ },
+ "agent_hit_rates": {
+  "Borrowing": {
+   "right": 16,
+   "calls": 42
+  },
+  "Chart": {
+   "right": 19,
+   "calls": 42
+  },
+  "Crash": {
+   "right": 19,
+   "calls": 38
+  },
+  "Long-term": {
+   "right": 22,
+   "calls": 41
+  },
+  "Miner": {
+   "right": 24,
+   "calls": 42
+  },
+  "Mood": {
+   "right": 23,
+   "calls": 42
+  },
+  "Network": {
+   "right": 24,
+   "calls": 42
+  },
+  "Stablecoin": {
+   "right": 20,
+   "calls": 42
+  },
+  "World economy": {
+   "right": 17,
+   "calls": 42
+  }
+ },
+ "stablecoin_walk_forward": {
+  "liquidity_train_end": "2022-10-19",
+  "depeg": "not retrained (ValueError; 0 rows before the window)"
+ },
+ "mood_llm": true
+}

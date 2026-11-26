@@ -1,0 +1,101 @@
+{
+ "name": "slide-2025",
+ "label": null,
+ "days": 47,
+ "start": "2025-10-20",
+ "end": "2025-12-05",
+ "btc_change_pct": -19.266169670726395,
+ "max_drawdown_pct": -26.029867474864552,
+ "up_days": 19,
+ "mean_active_agents": 11.404255319148936,
+ "brier": {
+  "exchange": 0.24710253866599602,
+  "vote": 0.24931092571969427,
+  "average": 0.24710726277246756,
+  "constant_50": 0.25
+ },
+ "exchange_direction_hits": 26,
+ "always_down_hits": 28,
+ "mean_exchange": 0.4812329225521757,
+ "big_down_days": [
+  {
+   "day": "2025-11-13",
+   "change_pct": -5.113769386957956,
+   "exchange": 0.486994433864085,
+   "vote": 0.45454545454545453
+  },
+  {
+   "day": "2025-11-19",
+   "change_pct": -5.371341978632305,
+   "exchange": 0.462658744528303,
+   "vote": 0.2727272727272727
+  }
+ ],
+ "mean_exchange_before_big_drops": 0.474826589196194,
+ "boss_paper": {
+  "final_equity": 10000.0,
+  "return_pct": 0.0,
+  "trades": 0,
+  "buy_and_hold_pct": -19.266169670726395
+ },
+ "boss_paper_sensitivity": {
+  "final_equity": 10000.0,
+  "return_pct": 0.0,
+  "trades": 0,
+  "buy_and_hold_pct": -19.266169670726395,
+  "buy_at": 0.52,
+  "sell_at": 0.46,
+  "note": "Thresholds chosen after seeing the Exchange's range; sensitivity only, not the live rule."
+ },
+ "agent_hit_rates": {
+  "Betting odds": {
+   "right": 13,
+   "calls": 19
+  },
+  "Borrowing": {
+   "right": 28,
+   "calls": 47
+  },
+  "Chart": {
+   "right": 26,
+   "calls": 47
+  },
+  "Crash": {
+   "right": 28,
+   "calls": 47
+  },
+  "ETF": {
+   "right": 26,
+   "calls": 47
+  },
+  "Long-term": {
+   "right": 19,
+   "calls": 46
+  },
+  "Miner": {
+   "right": 32,
+   "calls": 47
+  },
+  "Mood": {
+   "right": 15,
+   "calls": 47
+  },
+  "Network": {
+   "right": 29,
+   "calls": 47
+  },
+  "Stablecoin": {
+   "right": 19,
+   "calls": 47
+  },
+  "World economy": {
+   "right": 19,
+   "calls": 47
+  }
+ },
+ "stablecoin_walk_forward": {
+  "liquidity_train_end": "2025-10-19",
+  "depeg": "not retrained (ValueError; 0 rows before the window)"
+ },
+ "mood_llm": true
+}

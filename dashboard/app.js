@@ -1572,3 +1572,314 @@ function drawPortfolio() {
   await refreshPortfolio();
   setTimeout(pollPortfolio, 5000);
 })();
+
+/* ---------- Group chat: replays the latest saved forecast as a team chat with a live poll ---------- */
+const chatLLM=new Set(['News','Mood']);
+const chatQuips={
+    'Chart':['Candles looking spicy 🕯️📈','Chart says nope 📉','Flat chart, flat vibes'],
+    'Borrowing':['Traders are borrowing to go long 💸','Leverage is unwinding, careful 🧯','Funding is meh'],
+    'Network':['The chain is buzzing ⛓️','The chain is kinda quiet rn','On-chain looks neutral'],
+    'Miner':['Miners are chilling, not dumping ⛏️','Miners might be selling 😬','Miners look neutral'],
+    'Stablecoin':['Fresh stablecoin cash is coming in 💵','Stablecoin liquidity is drying up 🏜️','Stablecoins are steady'],
+    'ETF':['ETFs are buying 🏦','ETF money is walking out the door 🚪','ETF flows are flat'],
+    'News':['Headlines look good 📰','Headlines are rough 📰','News is mixed'],
+    'Mood':['Vibes are bullish 😎','Vibes are fearful 😨','Vibes are neutral 😐'],
+    'World economy':['Dollar is easing, good for BTC 🌍','Strong dollar, not great for BTC 🌍','Macro looks neutral'],
+    'Betting odds':['Bettors lean up 🎲','Bettors lean down 🎲','Bettors are split'],
+    'Crash':['No crash signal, relax 🛟','Tail-risk alert 🚨','No strong crash signal'],
+    'Long-term':['Zooming out, BTC looks cheap 🔭','Zooming out, still stretched 🔭','Long-term picture is neutral'],
+    'Contrarian':['You all agree too much… so I disagree 🙃','You all agree too much… so I disagree 🙃','Not enough consensus to fight. Staying at 50% 🤷'],
+};
+let chatTimer=null,chatForecastId;
+function chatVote(a){if(!a||typeof a.p_up!=='number'||a.data_missing===true)return 'abstain';return a.p_up>.5?'up':a.p_up<.5?'down':'neutral'}
+function chatClip(text,max){text=String(text??'').replace(/\s+/g,' ').trim();return text.length>max?text.slice(0,max-1)+'…':text}
+function chatAvatar(role,emoji){const box=node('span',undefined,'chat-avatar');const icon=role?agentIcon(role):null;if(icon)box.append(icon);else box.textContent=emoji||'A';return box}
+function chatScript(s){
+    const f=s.forecast,msgs=[],time=f.created_at;
+    if(chatIsBacktest(f))msgs.push({kind:'system',text:'🕰️ Backtest'+(f.scenario?' · '+f.scenario.label:'')+': rebuilt from data published by the end of '+chatDayLabel(f).replace(' close','')+' (UTC). Nobody gets to see anything from later. News, Mood and Betting odds sit out: there is no archive of what they could have read that day.'});
+    if(f.events?.today)msgs.push({kind:'system',text:'📅 That day: '+f.events.today+(f.events.pinned?' 📌':'')});
+    else if(f.events?.pinned)msgs.push({kind:'system',text:'📌 One of the dates you asked about'});
+    msgs.push({kind:'system',text:'📊 Agent Exchange started a poll: will BTC be higher 24 hours from now? Everyone post your evidence, then vote.'});
+    for(const [role] of roles){
+        const a=f.agents.find(x=>x.role===role),vote=chatVote(a),missing=vote==='abstain';
+        const llm=chatLLM.has(role);let quip,evidence;
+        if(missing){
+            const reason=String((a?.limitations||a?.evidence||[])[0]??'No usable data for this run');
+            const noKey=/model client/i.test(reason);
+            quip=llm&&noKey?"No Gemini key connected, so I can't read anything this round. Sitting this one out 😴":"Can't see fresh data, sitting this one out 😴";
+            evidence=noKey?'':reason;
+            if(chatIsBacktest(f)&&/leak the future/i.test(reason)){quip="🙈 No peeking: there's no archive of what I could have read that day, so I sit this one out.";evidence=reason}
+            else if(chatIsBacktest(f)&&/training window|in-sample/i.test(reason)){quip="📚 That day is inside my model's training data, so using it would be grading my own homework. Sitting out.";evidence=''}
+        }else{
+            quip=chatQuips[role]?.[vote==='up'?0:vote==='down'?1:2]??'';
+            const lines=(Array.isArray(a.evidence)?a.evidence:[a.evidence]).map(String);evidence=lines.find(x=>!x.trim().toLowerCase().startsWith('source '))??lines[0]??'';
+        }
+        msgs.push({kind:'agent',role,llm,vote,p:missing?null:a.p_up,quip,evidence:chatClip(evidence,190),time});
+    }
+    const tally={up:0,down:0,neutral:0,abstain:0};msgs.filter(m=>m.kind==='agent').forEach(m=>tally[m.vote]++);
+    const m=f.methods||{};
+    msgs.push({kind:'admin',time,text:'Poll closed: '+tally.up+' up · '+tally.down+' down'+(tally.neutral?' · '+tally.neutral+' neutral at 50%':'')+' · '+tally.abstain+' abstained (no data). A plain majority vote counts only the up and down votes: '+tally.up+' of '+(tally.up+tally.down)+' = '+percent(m.vote)+' chance of up. But the Exchange weights each agent by the coins it has won on past bets'+(f.cap_feasible?', with no agent above 20% of the say':'')+', so the team forecast is '+percent(m.exchange)+' up. (Simple average: '+percent(m.average)+'.)'});
+    const d=s.debate;
+    if(d?.available&&Array.isArray(d.turns)){
+        msgs.push({kind:'system',text:'🧵 Side thread: the Bull / Bear / Judge debate (Gemini) read the same reports.'});
+        const em={Bull:'🐂',Bear:'🐻',Judge:'⚖️'};
+        for(const t of d.turns)msgs.push({kind:'debate',name:t.role,emoji:em[t.role]||'💬',text:chatClip(t.argument,320)+(t.role==='Judge'&&typeof t.p_up==='number'?' → '+percent(t.p_up)+' up':''),time});
+    }
+    if(s.live&&chatBossMode==='sens')msgs.push({kind:'system',text:'⚖️ The 52/46 sensitivity switch only applies to replays. Live paper trades always use the dashboard\'s 55/45 rule.'});
+    msgs.push({kind:'boss',time,first:true,text:(s.live?'':'(Back then) ')+bossIntro(f,s.live)});
+    if(s.live)msgs.push({kind:'bossTrade',time});
+    else if(chatOutcome(s.settlement)){msgs.push(chatResultMsg(f,s.settlement));msgs.push({kind:'boss',time:f.contract?.target_time??time,text:bossReview(f,s.settlement)})}
+    else msgs.push({kind:'system',text:'⏳ Not settled yet: the 24-hour result is due '+utc(f.contract?.target_time)+'. It is scored on the next refresh or forecast after that.'});
+    return msgs;
+}
+function chatMessage(msg){
+    const li=node('li',undefined,'chat-msg chat-'+msg.kind);
+    if(msg.kind==='system'){li.append(node('span',msg.text,'chat-system'));return li}
+    const avatar=msg.kind==='agent'?chatAvatar(msg.role):msg.kind==='admin'||msg.kind==='result'?chatAvatar(null,'A'):msg.kind==='boss'?chatAvatar(null,'👔'):chatAvatar(null,msg.emoji);
+    if(msg.kind==='boss')avatar.classList.add('chat-boss-avatar');
+    if(msg.kind==='admin'||msg.kind==='result')avatar.classList.add('chat-admin-avatar');
+    const bubble=node('div',undefined,'chat-bubble'),head=node('div',undefined,'chat-head');
+    head.append(node('strong',msg.kind==='agent'?msg.role:msg.kind==='admin'||msg.kind==='result'?'Agent Exchange':msg.kind==='boss'?'Paper Trader':msg.name));
+    if(msg.kind==='boss')head.append(node('span','boss','chat-badge boss'));
+    if(msg.kind==='agent')head.append(node('span',msg.llm?'🤖 LLM · Gemini':'⚙️ code','chat-badge'+(msg.llm?' llm':'')));
+    if(msg.kind==='admin')head.append(node('span','admin','chat-badge admin'));
+    if(msg.kind==='result')head.append(node('span','📢 results','chat-badge admin'));
+    if(msg.kind==='debate')head.append(node('span','🤖 Gemini','chat-badge llm'));
+    head.append(node('time',utc(msg.time).replace(/^\d+ \w+,? /,'')));
+    bubble.append(head);
+    if(msg.kind==='agent'){
+        bubble.append(node('p',msg.quip));
+        if(msg.evidence)bubble.append(node('blockquote',msg.evidence));
+        bubble.append(node('span',msg.vote==='abstain'?'🗳️ abstained (no data)':msg.vote==='neutral'?'🗳️ neutral · '+percent(msg.p):'🗳️ voted '+msg.vote.toUpperCase()+' · '+percent(msg.p),'chat-vote '+msg.vote));
+    }else bubble.append(node('p',msg.text));
+    if(msg.lines){const list=node('ul',undefined,'chat-lines');msg.lines.forEach(x=>list.append(node('li',x)));bubble.append(list)}
+    li.append(avatar,bubble);return li;
+}
+function chatTyping(name){const li=node('li',undefined,'chat-msg chat-typing');li.append(node('span',name+' is typing'),node('i'),node('i'),node('i'));return li}
+function chatRenderPoll(f,votes){
+    const poll=$('chat-poll');poll.replaceChildren();
+    poll.append(node('div','POLL','eyebrow'),node('h3','Will BTC be higher in 24h?'));
+    const total=votes.length;
+    for(const [key,label] of [['up','📈 Up'],['down','📉 Down'],['neutral','🤷 Neutral (50%)'],['abstain','😴 Abstain (no data)']]){
+        const who=votes.filter(v=>v.vote===key),row=node('div',undefined,'poll-option '+key);
+        const top=node('div',undefined,'poll-top');top.append(node('span',label),node('strong',String(who.length)));
+        const bar=node('div',undefined,'poll-bar'),fill=node('i');fill.style.width=(who.length/13*100)+'%';bar.append(fill);
+        const faces=node('div',undefined,'poll-faces');who.forEach(v=>{const icon=agentIcon(v.role);if(icon){icon.title=v.role;faces.append(icon)}});
+        row.append(top,bar,faces);poll.append(row);
+    }
+    poll.append(node('div',total+' of 13 voted','poll-count'));
+    if(f&&total===13){const res=node('div',undefined,'poll-result');const m=f.methods||{};
+        for(const [label,v] of [['Majority vote',m.vote],['Simple average',m.average],['Agent Exchange',m.exchange]]){const r=node('div');r.append(node('span',label),node('strong',percent(v)+' up'));res.append(r)}
+        poll.append(res)}
+}
+function chatReset(){
+    clearTimeout(chatTimer);chatTimer=null;chatRun++;
+    const s=chatSource(),f=s?.forecast,feed=$('chat-feed');feed.replaceChildren();
+    $('chat-play').disabled=!f;$('chat-skip').disabled=!f;
+    setText('chat-sub',f?(s.live?'Latest forecast '+utc(f.created_at):chatIsBacktest(f)?'🕰️ Backtest · '+chatDayLabel(f):'Archived forecast '+utc(f.created_at))+' · press play':'No forecast yet');
+    feed.append(node('li',f?'▶ Press "Play chat" to watch the agents talk it out.':chatSel==='live'?'Generate a 24h forecast, or pick a past day from the archive.':'That forecast is no longer available.','chat-empty'));
+    chatRenderPoll(f,[]);
+}
+function chatPollNote(label,value,cls){const box=node('div',undefined,'poll-boss'+(cls?' '+cls:''));box.append(node('span',label),node('strong',value));$('chat-poll').append(box)}
+/* Boss paper trader: same thresholds as PaperStore.decide in dashboard/service.py (BUY >= 55%, SELL <= 45%). */
+const BOSS_BUY=.55,BOSS_SELL=.45;
+// Replay-only sensitivity: thresholds matched to the Exchange's observed range (chosen after seeing the data).
+const BOSS_SENS={buy:.52,sell:.46};
+let chatBossMode='live';   // replay-only switch; not stored in the browser (team rule: no browser storage in app.js)
+const chatThresholds=live=>chatBossMode==='sens'&&!live?BOSS_SENS:{buy:BOSS_BUY,sell:BOSS_SELL};
+let chatRun=0;
+const chatSleep=ms=>new Promise(r=>setTimeout(r,ms));
+function bossIntro(f,live){
+    const p=f.methods?.exchange,th=chatThresholds(live);
+    if(typeof p!=='number')return "Alright team 👔 No usable team forecast this round, so I'm not touching the money. HOLD 🤚";
+    const settings=state?.paper_settings,size=settings?.configured?Number(settings.buy_fraction)*100:null;
+    const requested=p>=th.buy?'BUY':p<=th.sell?'SELL':'HOLD';
+    let text='Alright team 👔 I read the poll. The Exchange says '+percent(p)+' up. My rule'+(th===BOSS_SENS?' (sensitivity check, picked after seeing the data)':'')+': BUY at '+num(th.buy*100,0)+'% or more, SELL at '+num(th.sell*100,0)+'% or less, otherwise HOLD. ';
+    if(requested==='BUY'){
+        text+=percent(p)+' clears the bar → BUY 🟢'+(size!==null?' ('+num(size,1)+'% of our cash)':'')+'. BTC can never be more than 25% of the account.';
+        if(!f.cap_feasible)text+=" …but fewer than 5 agents are active, so the 20% influence cap can't be enforced, and the risk desk blocks new BUYs. HOLD instead.";
+    }else if(requested==='SELL')text+=percent(p)+' is low enough → SELL 🔴 whatever BTC we hold.';
+    else text+=percent(p)+' is in the no-trade zone → HOLD 🤚';
+    return text;
+}
+async function bossExecute(f){
+    const before=portfolioValuation?.portfolio??null;
+    if(state?.paper?.forecast_id===f.id)return {result:state.paper,before:null};
+    if(!state?.paper_settings?.configured)return {blocked:'Paper trading is not switched on yet. Enable it under "Paper decision & risk controls", then press play again.',before};
+    const age=(Date.now()-Date.parse(f.created_at))/1000;
+    if(age>170)return {blocked:'This forecast is '+Math.max(3,Math.round(age/60))+' minutes old. I only trade on forecasts less than 3 minutes old, so no one trades on stale information. Generate a fresh forecast and press play.',before};
+    if(state?.busy)return {blocked:'The dashboard is busy with another action. Try again in a moment.',before};
+    try{await post('paper')}catch(error){return {blocked:error.message,before}}
+    for(let i=0;i<40&&state?.paper?.forecast_id!==f.id;i++){await chatSleep(250);await refreshState()}
+    await refreshPortfolio();
+    return state?.paper?.forecast_id===f.id?{result:state.paper,before}:{blocked:'The paper decision did not come back in time; check the Paper decision panel.',before};
+}
+function bossReceipt(outcome){
+    const li=node('li',undefined,'chat-msg chat-boss'),avatar=chatAvatar(null,'👔');avatar.classList.add('chat-boss-avatar');
+    const bubble=node('div',undefined,'chat-bubble'),head=node('div',undefined,'chat-head');
+    head.append(node('strong','Paper Trader'),node('span','boss','chat-badge boss'));bubble.append(head);
+    const r=outcome.result,usd=v=>v==null?'—':money(Number(v)),btc=v=>v==null?'—':num(Number(v),6)+' BTC';
+    let headline,quip,cls;
+    if(!r){headline='🚫 No trade: '+outcome.blocked;quip='Account unchanged.';cls='blocked'}
+    else{
+        const status=r.risk?.status??(r.trade?'executed':r.requested!=='HOLD'?'blocked':'no_trade'),t=r.trade;
+        if(status==='executed'&&t){
+            headline='✅ '+t.action+' executed: '+num(Number(t.quantity_btc),6)+' BTC at '+usd(t.execution_price_usd)+' (fee '+usd(t.fee_usd)+')';
+            quip=t.action==='BUY'?"Money's in. Now we wait 24 hours to see who was right 🍿":'Took some chips off the table 💰';cls='executed';
+        }else if(status==='blocked'||status==='halted'){headline='🚫 '+r.requested+' blocked by the risk desk: '+(r.risk?.reason??'risk check failed');quip='Rules are rules. Account unchanged.';cls='blocked'}
+        else{headline='🤚 '+(r.requested==='SELL'?'SELL requested, but there was no BTC to sell':'HOLD: no order placed')+'.';quip='Cash is a position too 😎';cls='hold'}
+    }
+    bubble.append(node('p',headline,'boss-headline '+cls));
+    const after=r?.portfolio??null,before=outcome.before;
+    if(after||before){
+        const table=node('div',undefined,'boss-ledger'),row=(a,b,c,d)=>{const x=node('div');x.append(node('span',a),node('span',b),node('span',c),node('strong',d));return x};
+        table.append(row('', 'Before','→','After'));
+        table.append(row('💵 Cash',before?usd(before.cash_usd):'—','→',after?usd(after.cash_usd):usd(before?.cash_usd)));
+        table.append(row('₿ BTC held',before?btc(before.btc):'—','→',after?btc(after.btc):btc(before?.btc)));
+        table.append(row('📊 Account value',before?usd(before.equity_usd):'—','→',after?usd(after.equity_usd):usd(before?.equity_usd)));
+        bubble.append(table);
+        const p=after??before;
+        if(p)bubble.append(node('small','Since the 10,000 USD start: '+(Number(p.total_pnl_usd)<0?'−':'+')+money(Math.abs(Number(p.total_pnl_usd)))+' ('+num(Number(p.return_pct))+'%) · fees so far '+usd(p.total_fees_usd)+' · simulated money only','boss-foot'));
+    }
+    bubble.append(node('p',quip));
+    li.append(avatar,bubble);return li;
+}
+function chatPollDecision(outcome){
+    const poll=$('chat-poll'),box=node('div',undefined,'poll-boss'),r=outcome.result,t=r?.trade;
+    const label=!r?'No trade':t?t.action+' '+num(Number(t.quantity_btc),6)+' BTC':r.risk?.status==='blocked'?r.requested+' blocked':'HOLD';
+    box.append(node('span','👔 Boss decision'),node('strong',label));poll.append(box);
+}
+async function chatPlay(instant){
+    const s=chatSource();if(!s?.forecast)return;
+    clearTimeout(chatTimer);const run=++chatRun,f=s.forecast,msgs=chatScript(s),feed=$('chat-feed'),votes=[];
+    feed.replaceChildren();chatRenderPoll(f,votes);
+    setText('chat-sub',(s.live?'Latest forecast '+utc(f.created_at):chatIsBacktest(f)?'🕰️ Backtest · '+chatDayLabel(f):'Archived forecast '+utc(f.created_at))+' · '+(instant?'full transcript':'replay'));
+    const scroll=()=>{feed.scrollTop=feed.scrollHeight};
+    const show=msg=>{feed.append(chatMessage(msg));if(msg.kind==='agent'){votes.push(msg);chatRenderPoll(f,votes)}
+        if(msg.kind==='boss'&&msg.first&&!s.live)chatPollNote('👔 Boss decision (then)',chatBossRule(f));
+        if(msg.kind==='result'){const o=chatOutcome(s.settlement);chatPollNote('📢 24h result',(o.up?'UP ':'DOWN ')+chatSigned(o.change)+'%',o.up?'result-up':'result-down')}
+        scroll()};
+    const wait=ms=>instant?Promise.resolve():new Promise(r=>{chatTimer=setTimeout(r,ms)});
+    for(const msg of msgs){
+        if(run!==chatRun)return;
+        if(msg.kind==='system'){show(msg);await wait(700);continue}
+        const name=msg.kind==='agent'?msg.role:msg.kind==='admin'||msg.kind==='result'?'Agent Exchange':msg.kind==='boss'||msg.kind==='bossTrade'?'Paper Trader':msg.name;
+        const typing=chatTyping(msg.kind==='bossTrade'?name+' is placing the order':name);
+        if(!instant){feed.append(typing);scroll()}
+        if(msg.kind==='bossTrade'){
+            const outcome=await bossExecute(f);await wait(600);
+            if(run!==chatRun)return;typing.remove();feed.append(bossReceipt(outcome));chatPollDecision(outcome);scroll();continue;
+        }
+        await wait(['admin','boss','result'].includes(msg.kind)?1400:850);
+        if(run!==chatRun)return;typing.remove();show(msg);
+        await wait(['admin','boss','result'].includes(msg.kind)?900:450);
+    }
+    chatTimer=null;
+}
+/* ---------- Archive: replay any saved forecast and compare settled days ---------- */
+let chatArchive=[],chatSel='live';
+const chatIsBacktest=f=>f?.mode==='backtest';
+const chatDayLabel=f=>chatIsBacktest(f)?new Date(f.decision_day+'T00:00:00Z').toLocaleDateString('en-GB',{timeZone:'UTC',day:'2-digit',month:'short',year:'numeric'})+' close':utc(f.created_at);
+const chatScenario=f=>chatIsBacktest(f)?(f.scenario?.label??'Backtest'):null;
+const chatGroupOf=f=>chatIsBacktest(f)?'🕰️ '+chatScenario(f):'Live forecasts';
+let chatSummaries=[],chatFilter='Live forecasts';
+const chatEventTag=(f,o)=>{const e=f?.events||{},bits=[];if(e.pinned)bits.push('📌');if(o&&o.change<=-5)bits.push('💥');else if(o&&o.change>=5)bits.push('🚀');if(e.next_day)bits.push('next day: '+e.next_day);else if(e.next_day_headlines)bits.push('🗞️ next day: '+e.next_day_headlines);else if(e.today)bits.push(e.today);return bits.join(' ')};
+function chatSource(){
+    if(chatSel==='live')return state?.forecast?{forecast:state.forecast,debate:state.debate,settlement:null,live:true}:null;
+    const item=chatArchive.find(i=>i.forecast.id===chatSel);
+    return item?{forecast:item.forecast,debate:null,settlement:item.settlement,live:false}:null;
+}
+function chatBossRule(f){
+    const p=f.methods?.exchange;if(typeof p!=='number')return 'HOLD';
+    const th=chatThresholds(false),r=p>=th.buy?'BUY':p<=th.sell?'SELL':'HOLD';
+    return r==='BUY'&&!f.cap_feasible?'HOLD':r;
+}
+function chatOutcome(st){
+    if(!st?.settled||typeof st.reference_price!=='number'||typeof st.target_price!=='number')return null;
+    return {up:!!st.went_up,start:st.reference_price,end:st.target_price,change:(st.target_price/st.reference_price-1)*100};
+}
+const chatBrier=(p,up)=>typeof p==='number'?(p-(up?1:0))**2:null;
+const chatSigned=(v,d=2)=>(v<0?'−':'+')+num(Math.abs(v),d);
+function chatResultMsg(f,st){
+    const o=chatOutcome(st),m=f.methods||{},right=[],wrong=[];
+    for(const a of f.agents){const v=chatVote(a);if(v==='up'||v==='down')((v==='up')===o.up?right:wrong).push(a.role)}
+    const roleOf=Object.fromEntries(f.agents.map(a=>[a.agent,a.role]));
+    const bets=(st.bets||[]).map(b=>({role:roleOf[b.agent]??b.agent,change:Number(b.change)})).filter(b=>Number.isFinite(b.change)).sort((a,b)=>b.change-a.change);
+    const lines=['✅ Called it: '+(right.join(', ')||'nobody'),'❌ Missed: '+(wrong.join(', ')||'nobody')];
+    if(f.events?.next_day)lines.unshift('📰 What happened: '+f.events.next_day);
+    else if(f.events?.next_day_headlines)lines.unshift('🗞️ From that day\'s headlines: '+f.events.next_day_headlines);
+    if(bets.length)lines.push('🪙 Coins after settling: biggest winner '+bets[0].role+' ('+chatSigned(bets[0].change)+'), biggest loser '+bets.at(-1).role+' ('+chatSigned(bets.at(-1).change)+'). Winners get more say next time.');
+    lines.push('🎯 Scores (Brier, lower is better): Exchange '+num(chatBrier(m.exchange,o.up),3)+' · Vote '+num(chatBrier(m.vote,o.up),3)+' · Average '+num(chatBrier(m.average,o.up),3));
+    return {kind:'result',time:f.contract?.target_time??st.settled_at,
+        text:'⏰ 24 hours later: BTC went from '+money(o.start)+' to '+money(o.end)+' ('+chatSigned(o.change)+'%) → it went '+(o.up?'UP 📈':'DOWN 📉')+'.',lines};
+}
+function bossReview(f,st){
+    const rule=chatBossRule(f),o=chatOutcome(st);
+    if(!o)return "Waiting for the result like everyone else 🍿";
+    const settings=state?.paper_settings,frac=settings?.configured?Number(settings.buy_fraction):.10;
+    if(rule==='BUY'){const pnl=10000*frac*o.change/100;return 'Hindsight 👔: a '+num(frac*100,0)+'% BUY on a 10,000 USD account would have '+(pnl>=0?'made':'lost')+' about '+money(Math.abs(pnl))+' before fees (hypothetical; no trade was placed from this replay).'}
+    if(rule==='SELL')return 'Hindsight 👔: a fresh account has no BTC to sell, so we sat in cash while BTC moved '+chatSigned(o.change)+'%. '+(o.change<0?'Dodged that drop 😎':'Missed that move 🤷');
+    return 'Hindsight 👔: we sat in cash while BTC moved '+chatSigned(o.change)+'%. '+(o.change>0?'Missed a bit of upside, but took no risk 🤷':'Dodged that drop 😎');
+}
+async function chatLoadArchive(){
+    try{const r=await fetch('/api/archive');if(!r.ok)throw new Error();const j=await r.json();chatArchive=j.items||[];chatSummaries=j.summaries||[]}catch{chatArchive=[];chatSummaries=[]}
+    const sel=$('chat-day'),keep=chatSel;sel.replaceChildren();
+    const live=node('option','Latest forecast (live)');live.value='live';sel.append(live);
+    const groups=new Map([['Live forecasts',node('optgroup')]]);
+    for(const item of chatArchive){const f=item.forecast,o=chatOutcome(item.settlement),key=chatGroupOf(f);
+        if(!groups.has(key))groups.set(key,node('optgroup'));
+        const tag=chatEventTag(f,o),opt=node('option',chatDayLabel(f)+' · '+(o?(o.up?'UP ':'DOWN ')+chatSigned(o.change,1)+'%':'pending')+(tag?' · '+tag:'')+' · Exchange '+percent(f.methods?.exchange));
+        opt.value=f.id;groups.get(key).append(opt)}
+    const fsel=$('chat-archive-filter'),fkeep=chatFilter;fsel.replaceChildren();
+    for(const [label,g] of groups){if(!g.children.length)continue;g.label=label;sel.append(g);const o=node('option',label);o.value=label;fsel.append(o)}
+    chatSel=[...sel.options].some(o=>o.value===keep)?keep:'live';sel.value=chatSel;
+    chatFilter=[...fsel.options].some(o=>o.value===fkeep)?fkeep:(fsel.options[0]?.value??'');fsel.value=chatFilter;
+    chatRenderArchive();
+}
+function chatRenderArchive(){
+    const body=$('chat-archive-rows');body.replaceChildren();
+    const list=chatArchive.filter(i=>chatGroupOf(i.forecast)===chatFilter),settled=[];
+    for(const item of list){
+        const f=item.forecast,m=f.methods||{},o=chatOutcome(item.settlement),row=node('tr');
+        if(o)settled.push({m,o});
+        const tag=chatEventTag(f,o);
+        const cells=[chatIsBacktest(f)?'🕰️ Backtest':'Live',chatDayLabel(f)+(tag?'  '+tag:''),String(f.active_count??'—')+' / 13',percent(m.exchange),percent(m.vote),percent(m.average),chatBossRule(f),
+            o?money(o.start)+' → '+money(o.end):'—'];
+        cells.forEach(c=>row.append(node('td',c)));
+        const res=node('td');res.append(node('span',o?(o.up?'📈 UP ':'📉 DOWN ')+chatSigned(o.change)+'%'+(o.change<=-5?' 💥':''):'⏳ due '+utc(f.contract?.target_time),'chat-vote '+(o?(o.up?'up':'down'):'abstain')));row.append(res);
+        row.append(node('td',o?num(chatBrier(m.exchange,o.up),3):'—'),node('td',o?num(chatBrier(m.vote,o.up),3):'—'));
+        const act=node('td'),btn=node('button','▶ Replay','report-button');
+        btn.addEventListener('click',()=>{chatSel=f.id;$('chat-day').value=f.id;chatReset();$('groupchat').scrollIntoView({behavior:'smooth'});chatPlay(false)});
+        act.append(btn);row.append(act);body.append(row);
+    }
+    if(!list.length){const row=node('tr'),cell=node('td','No saved forecasts yet.','empty-inline');cell.colSpan=12;row.append(cell);body.append(row)}
+    const summary=chatSummaries.find(s=>'🕰️ '+s.label===chatFilter);
+    if(summary){
+        const b=summary.brier,boss=summary.boss_paper,big=summary.big_down_days||[];
+        setText('chat-archive-note',summary.days+' days ('+summary.start+' → '+summary.end+') · BTC '+chatSigned(summary.btc_change_pct,1)+'%, worst drawdown '+num(summary.max_drawdown_pct,1)+'%'+
+            ' · score (Brier, lower is better): Exchange '+num(b.exchange,3)+', vote '+num(b.vote,3)+', average '+num(b.average,3)+', always-50% 0.250'+
+            ' · Exchange right on direction '+summary.exchange_direction_hits+' of '+summary.days+' (always saying "down": '+summary.always_down_hits+')'+
+            ' · '+big.length+' 💥 days (BTC −5% or worse): Exchange averaged '+(summary.mean_exchange_before_big_drops==null?'—':percent(summary.mean_exchange_before_big_drops))+' up the day before'+
+            (chatBossMode==='sens'?(summary.boss_paper_sensitivity?
+              ' · Boss ⚖️ sensitivity 52/46 (picked after seeing the data): '+summary.boss_paper_sensitivity.trades+' trades, '+chatSigned(summary.boss_paper_sensitivity.return_pct,1)+'% vs buy-and-hold '+chatSigned(boss.buy_and_hold_pct,1)+'%':
+              ' · Boss ⚖️ sensitivity 52/46: result not computed for this window yet (rerun the backtest)'):
+              ' · Boss 55/45: '+boss.trades+' trades, '+chatSigned(boss.return_pct,1)+'% vs buy-and-hold '+chatSigned(boss.buy_and_hold_pct,1)+'%'));
+        return;
+    }
+    const mean=k=>settled.length?settled.reduce((s,x)=>s+chatBrier(x.m[k],x.o.up),0)/settled.length:null;
+    const ups=settled.filter(x=>x.o.up).length,hits=settled.filter(x=>typeof x.m.exchange==='number'&&(x.m.exchange>.5)===x.o.up).length,pending=list.length-settled.length;
+    setText('chat-archive-note',settled.length?settled.length+' settled'+(pending?' · '+pending+' pending':'')+' · BTC up '+ups+' · Exchange right on direction '+hits+' · mean score Exchange '+num(mean('exchange'),3)+', vote '+num(mean('vote'),3)+', average '+num(mean('average'),3)+' (Brier, lower is better; always saying 50% scores 0.250)':list.length+' saved · none settled yet (each settles 24 hours after it was made)');
+}
+(function chatInit(){
+    if(!$('chat-feed'))return;
+    $('chat-play').addEventListener('click',()=>chatPlay(false));
+    $('chat-skip').addEventListener('click',()=>chatPlay(true));
+    $('chat-day').addEventListener('change',e=>{chatSel=e.target.value;chatReset();const it=chatArchive.find(i=>i.forecast.id===chatSel);if(it){chatFilter=chatGroupOf(it.forecast);$('chat-archive-filter').value=chatFilter;chatRenderArchive()}});
+    $('chat-archive-filter').addEventListener('change',e=>{chatFilter=e.target.value;chatRenderArchive()});
+    const syncBoss=()=>document.querySelectorAll('[data-boss]').forEach(b=>{const on=b.dataset.boss===chatBossMode;b.classList.toggle('selected',on);b.setAttribute('aria-pressed',String(on))});
+    document.querySelectorAll('[data-boss]').forEach(b=>b.addEventListener('click',()=>{chatBossMode=b.dataset.boss;syncBoss();chatReset();chatRenderArchive()}));
+    syncBoss();
+    chatReset();chatLoadArchive();
+    const base=render;
+    render=function(s){base(s);const id=s?.forecast?.id??null;if(id!==chatForecastId){chatForecastId=id;chatLoadArchive();if(chatSel==='live')chatReset()}};
+})();

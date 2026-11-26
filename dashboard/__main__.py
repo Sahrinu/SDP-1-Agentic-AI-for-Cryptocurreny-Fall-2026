@@ -435,6 +435,41 @@ def create_server(port=8765, *, root=ROOT, bind=True):
                             "error": "Portfolio valuation is unavailable; account history is unchanged"
                         },
                     )
+            if self.path == '/api/archive':
+                # Read-only: saved live forecasts plus their settlement in the live ledger (if 24h has passed).
+                items = []
+                for path in (root/'outputs/dashboard/forecasts').glob('*.json'):
+                    try:
+                        saved = json.loads(path.read_text(encoding='utf-8'))
+                    except (OSError, ValueError):
+                        continue
+                    if saved.get('mode') != 'live':
+                        continue
+                    try:
+                        settlement = ledger.result(saved['id'])
+                    except (TypeError, KeyError, sqlite3.Error):
+                        settlement = None
+                    agents = [{'agent':a.get('agent'),'role':a.get('role'),'p_up':a.get('p_up'),
+                               'data_missing':a.get('data_missing'),'evidence':(a.get('evidence') or [])[:3],
+                               'limitations':(a.get('limitations') or [])[:1]} for a in saved.get('agents', [])]
+                    items.append({'forecast':{k:saved.get(k) for k in ('id','created_at','mode','methods','cap_feasible',
+                                  'active_count','weights','quote','contract')} | {'agents':agents},
+                                  'settlement':settlement})
+                # Backtest days rebuilt by experiments/backtest_archive.py (already settled, labelled mode='backtest').
+                for path in (root/'outputs/dashboard/backtest').glob('*/archive/*.json'):
+                    try:
+                        saved = json.loads(path.read_text(encoding='utf-8'))
+                        items.append({'forecast':saved['forecast'],'settlement':saved['settlement']})
+                    except (OSError, ValueError, KeyError, TypeError):
+                        continue
+                items.sort(key=lambda item: item['forecast'].get('created_at') or '', reverse=True)
+                summaries = []
+                for path in (root/'outputs/dashboard/backtest').glob('*/summary.json'):
+                    try:
+                        summaries.append(json.loads(path.read_text(encoding='utf-8')))
+                    except (OSError, ValueError):
+                        continue
+                return self.respond(200,{'items':items,'summaries':summaries})
             if self.path == "/api/state":
                 with lock:
                     public = credentials.public_status()

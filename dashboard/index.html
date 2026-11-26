@@ -59,6 +59,7 @@
           <circle cx="12" cy="12" r="9" />
           <path d="M12 7v6l4 2" />
         </symbol>
+        <symbol id="i-chat" viewBox="0 0 24 24"><path d="M4 5h16v11H10l-5 4v-4H4z"/><path d="M8 10h.01M12 10h.01M16 10h.01" stroke-width="2.4"/></symbol>
         <symbol id="i-agent-chart" viewBox="0 0 24 24">
           <path d="M5 3v4m0 9v5M12 3v9m0 7v2M19 3v3m0 8v7" />
           <rect x="3" y="7" width="4" height="9" rx="1" />
@@ -132,7 +133,7 @@
           title="Live agent activity"
           aria-label="Live agent activity"
           ><svg><use href="#i-clock" /></svg><span>Activity</span></a
-        ><a href="#agents" class="rail-link" title="Agent signals" aria-label="Agent signals"
+        ><a href="#groupchat" class="rail-link" title="Agent group chat" aria-label="Agent group chat"><svg><use href="#i-chat"/></svg><span>Chat</span></a><a href="#agents" class="rail-link" title="Agent signals" aria-label="Agent signals"
           ><svg><use href="#i-agents" /></svg><span>Agents</span></a
         ><a
           href="#research"
@@ -512,6 +513,7 @@
             ><span>Forecasting does not place a paper trade</span>
           </div>
         </section>
+        <section class="panel section chat-panel" id="groupchat" aria-labelledby="chat-title"><div class="section-head"><div><div class="eyebrow">TEAM CHAT</div><h2 id="chat-title">The agents' group chat</h2><p>Replays the latest forecast as a conversation: each agent posts its evidence and votes in the poll, then the Exchange weighs the votes by track record and the boss Paper Trader decides what to do with the money. Read from the saved forecast; no new model calls.</p></div><div class="chat-controls"><label class="chat-day-label">📅 Day<select id="chat-day" aria-label="Choose which forecast to replay"><option value="live">Latest forecast (live)</option></select></label><div class="segmented chat-boss-toggle" role="group" aria-label="Boss trading rule for replays" title="Replays only. Live paper trades always use 55/45."><button type="button" data-boss="live" class="selected" aria-pressed="true">Boss 55/45</button><button type="button" data-boss="sens" aria-pressed="false">⚖️ Sensitivity 52/46</button></div><button class="button small primary" id="chat-play">▶ Play chat</button><button class="button small" id="chat-skip">Skip to end</button></div></div><div class="chat-layout"><div class="chat-window"><div class="chat-header"><span class="chat-group-icon">₿</span><div><strong>BTC desk · 13 agents + Exchange + 👔 Boss</strong><span id="chat-sub">No forecast yet</span></div></div><ol class="chat-feed" id="chat-feed" aria-live="polite"></ol></div><aside class="chat-poll" id="chat-poll" aria-label="Live poll"></aside></div><div class="chat-archive"><div class="chat-archive-head"><strong>📅 Archive scoreboard</strong><label class="chat-day-label">Show<select id="chat-archive-filter" aria-label="Choose which forecasts to list"></select></label><span id="chat-archive-note">Loading saved forecasts…</span></div><div class="table-scroll"><table class="agent-table chat-archive-table"><thead><tr><th>Type</th><th>Forecast (UTC)</th><th>Agents active</th><th>Exchange</th><th>Vote</th><th>Average</th><th>Boss rule</th><th>BTC then → 24h later</th><th>Result</th><th>Exchange score</th><th>Vote score</th><th></th></tr></thead><tbody id="chat-archive-rows"></tbody></table></div></div></section>
         <section class="panel section agents-panel" id="agents">
           <div class="section-head">
             <div>

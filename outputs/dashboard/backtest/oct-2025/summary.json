@@ -1,0 +1,99 @@
+{
+ "name": "oct-2025",
+ "label": "Oct 10 2025 liquidation crash (around 8 Oct)",
+ "days": 41,
+ "start": "2025-09-10",
+ "end": "2025-10-20",
+ "btc_change_pct": -4.96869954369955,
+ "max_drawdown_pct": -14.621429065349234,
+ "up_days": 22,
+ "mean_active_agents": 11.414634146341463,
+ "brier": {
+  "exchange": 0.24897719498810147,
+  "vote": 0.2527697522154285,
+  "average": 0.24878466422887893,
+  "constant_50": 0.25
+ },
+ "exchange_direction_hits": 21,
+ "always_down_hits": 19,
+ "mean_exchange": 0.5004140428314887,
+ "big_down_days": [
+  {
+   "day": "2025-10-09",
+   "change_pct": -7.305379476321361,
+   "exchange": 0.5046074201993337,
+   "vote": 0.5555555555555556
+  }
+ ],
+ "mean_exchange_before_big_drops": 0.5046074201993337,
+ "boss_paper": {
+  "final_equity": 10000.0,
+  "return_pct": 0.0,
+  "trades": 0,
+  "buy_and_hold_pct": -4.96869954369955
+ },
+ "boss_paper_sensitivity": {
+  "final_equity": 9826.169517186685,
+  "return_pct": -1.7383048281331526,
+  "trades": 4,
+  "buy_and_hold_pct": -4.96869954369955,
+  "buy_at": 0.52,
+  "sell_at": 0.46,
+  "note": "Thresholds chosen after seeing the Exchange's range; sensitivity only, not the live rule."
+ },
+ "agent_hit_rates": {
+  "Betting odds": {
+   "right": 2,
+   "calls": 5
+  },
+  "Borrowing": {
+   "right": 20,
+   "calls": 41
+  },
+  "Chart": {
+   "right": 20,
+   "calls": 41
+  },
+  "Crash": {
+   "right": 17,
+   "calls": 34
+  },
+  "ETF": {
+   "right": 22,
+   "calls": 41
+  },
+  "Long-term": {
+   "right": 18,
+   "calls": 38
+  },
+  "Miner": {
+   "right": 20,
+   "calls": 41
+  },
+  "Mood": {
+   "right": 24,
+   "calls": 39
+  },
+  "Network": {
+   "right": 21,
+   "calls": 41
+  },
+  "News": {
+   "right": 8,
+   "calls": 12
+  },
+  "Stablecoin": {
+   "right": 22,
+   "calls": 41
+  },
+  "World economy": {
+   "right": 26,
+   "calls": 41
+  }
+ },
+ "stablecoin_walk_forward": {
+  "liquidity_train_end": "2025-09-09",
+  "depeg": "not retrained (ValueError; 0 rows before the window)"
+ },
+ "mood_llm": true
+}

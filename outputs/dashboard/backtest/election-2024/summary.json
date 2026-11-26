@@ -1,0 +1,95 @@
+{
+ "name": "election-2024",
+ "label": null,
+ "days": 62,
+ "start": "2024-10-20",
+ "end": "2024-12-20",
+ "btc_change_pct": 40.93754214531553,
+ "max_drawdown_pct": -8.330762677354064,
+ "up_days": 35,
+ "mean_active_agents": 10.419354838709678,
+ "brier": {
+  "exchange": 0.25123801637024096,
+  "vote": 0.2701171878856996,
+  "average": 0.2511095265508009,
+  "constant_50": 0.25
+ },
+ "exchange_direction_hits": 31,
+ "always_down_hits": 27,
+ "mean_exchange": 0.5069094106605854,
+ "big_down_days": [
+  {
+   "day": "2024-12-17",
+   "change_pct": -5.5870357531921595,
+   "exchange": 0.507259096374664,
+   "vote": 0.375
+  }
+ ],
+ "mean_exchange_before_big_drops": 0.507259096374664,
+ "boss_paper": {
+  "final_equity": 10000.0,
+  "return_pct": 0.0,
+  "trades": 0,
+  "buy_and_hold_pct": 40.93754214531553
+ },
+ "boss_paper_sensitivity": {
+  "final_equity": 10671.589359979713,
+  "return_pct": 6.715893599797113,
+  "trades": 3,
+  "buy_and_hold_pct": 40.93754214531553,
+  "buy_at": 0.52,
+  "sell_at": 0.46,
+  "note": "Thresholds chosen after seeing the Exchange's range; sensitivity only, not the live rule."
+ },
+ "agent_hit_rates": {
+  "Borrowing": {
+   "right": 27,
+   "calls": 62
+  },
+  "Chart": {
+   "right": 35,
+   "calls": 62
+  },
+  "Crash": {
+   "right": 17,
+   "calls": 39
+  },
+  "ETF": {
+   "right": 31,
+   "calls": 62
+  },
+  "Long-term": {
+   "right": 26,
+   "calls": 53
+  },
+  "Miner": {
+   "right": 34,
+   "calls": 62
+  },
+  "Mood": {
+   "right": 9,
+   "calls": 18
+  },
+  "Network": {
+   "right": 32,
+   "calls": 62
+  },
+  "News": {
+   "right": 3,
+   "calls": 8
+  },
+  "Stablecoin": {
+   "right": 35,
+   "calls": 62
+  },
+  "World economy": {
+   "right": 28,
+   "calls": 62
+  }
+ },
+ "stablecoin_walk_forward": {
+  "liquidity_train_end": "2024-10-19",
+  "depeg": "not retrained (ValueError; 0 rows before the window)"
+ },
+ "mood_llm": true
+}

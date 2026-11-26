@@ -5,7 +5,12 @@ __pycache__/
 .env
 .env.*
 !.env.example
-outputs/
+outputs/*
+# Keep the rebuilt backtest days (experiments/backtest_archive.py) so the dashboard's
+# Day menu works on every machine; everything else under outputs/ stays local.
+!outputs/dashboard/
+outputs/dashboard/*
+!outputs/dashboard/backtest/
 *.egg-info/
 build/
 dist/

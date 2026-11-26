@@ -1,0 +1,95 @@
+{
+ "name": "apr-2025",
+ "label": null,
+ "days": 42,
+ "start": "2025-03-20",
+ "end": "2025-04-30",
+ "btc_change_pct": 14.564267717079549,
+ "max_drawdown_pct": -12.772542874044445,
+ "up_days": 23,
+ "mean_active_agents": 11.095238095238095,
+ "brier": {
+  "exchange": 0.25212213026893937,
+  "vote": 0.2786980814032582,
+  "average": 0.2522078311731703,
+  "constant_50": 0.25
+ },
+ "exchange_direction_hits": 20,
+ "always_down_hits": 19,
+ "mean_exchange": 0.5008372274595395,
+ "big_down_days": [
+  {
+   "day": "2025-04-05",
+   "change_pct": -6.1145713465215135,
+   "exchange": 0.5075032590261541,
+   "vote": 0.6
+  }
+ ],
+ "mean_exchange_before_big_drops": 0.5075032590261541,
+ "boss_paper": {
+  "final_equity": 10000.0,
+  "return_pct": 0.0,
+  "trades": 0,
+  "buy_and_hold_pct": 14.564267717079549
+ },
+ "boss_paper_sensitivity": {
+  "final_equity": 10175.350238722975,
+  "return_pct": 1.7535023872297586,
+  "trades": 5,
+  "buy_and_hold_pct": 14.564267717079549,
+  "buy_at": 0.52,
+  "sell_at": 0.46,
+  "note": "Thresholds chosen after seeing the Exchange's range; sensitivity only, not the live rule."
+ },
+ "agent_hit_rates": {
+  "Betting odds": {
+   "right": 2,
+   "calls": 4
+  },
+  "Borrowing": {
+   "right": 18,
+   "calls": 42
+  },
+  "Chart": {
+   "right": 21,
+   "calls": 42
+  },
+  "Crash": {
+   "right": 17,
+   "calls": 36
+  },
+  "ETF": {
+   "right": 22,
+   "calls": 42
+  },
+  "Long-term": {
+   "right": 22,
+   "calls": 38
+  },
+  "Miner": {
+   "right": 15,
+   "calls": 42
+  },
+  "Mood": {
+   "right": 24,
+   "calls": 42
+  },
+  "Network": {
+   "right": 16,
+   "calls": 42
+  },
+  "Stablecoin": {
+   "right": 23,
+   "calls": 42
+  },
+  "World economy": {
+   "right": 25,
+   "calls": 42
+  }
+ },
+ "stablecoin_walk_forward": {
+  "liquidity_train_end": "2025-03-19",
+  "depeg": "not retrained (ValueError; 0 rows before the window)"
+ },
+ "mood_llm": true
+}

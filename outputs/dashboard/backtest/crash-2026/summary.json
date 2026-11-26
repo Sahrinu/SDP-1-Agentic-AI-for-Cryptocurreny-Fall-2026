@@ -1,0 +1,107 @@
+{
+ "name": "crash-2026",
+ "label": null,
+ "days": 50,
+ "start": "2026-01-15",
+ "end": "2026-03-05",
+ "btc_change_pct": -28.754602279383455,
+ "max_drawdown_pct": -34.19801097852828,
+ "up_days": 18,
+ "mean_active_agents": 12.0,
+ "brier": {
+  "exchange": 0.24621357428028953,
+  "vote": 0.27387272727272727,
+  "average": 0.24622331656464716,
+  "constant_50": 0.25
+ },
+ "exchange_direction_hits": 30,
+ "always_down_hits": 32,
+ "mean_exchange": 0.48506481286184183,
+ "big_down_days": [
+  {
+   "day": "2026-01-28",
+   "change_pct": -5.206977066850738,
+   "exchange": 0.4925783308843398,
+   "vote": 0.36363636363636365
+  },
+  {
+   "day": "2026-01-30",
+   "change_pct": -6.550401024252306,
+   "exchange": 0.49284491755169124,
+   "vote": 0.36363636363636365
+  },
+  {
+   "day": "2026-02-04",
+   "change_pct": -14.017431361060218,
+   "exchange": 0.478595781515143,
+   "vote": 0.36363636363636365
+  }
+ ],
+ "mean_exchange_before_big_drops": 0.488006343317058,
+ "boss_paper": {
+  "final_equity": 10000.0,
+  "return_pct": 0.0,
+  "trades": 0,
+  "buy_and_hold_pct": -28.754602279383455
+ },
+ "boss_paper_sensitivity": {
+  "final_equity": 10000.0,
+  "return_pct": 0.0,
+  "trades": 0,
+  "buy_and_hold_pct": -28.754602279383455,
+  "buy_at": 0.52,
+  "sell_at": 0.46,
+  "note": "Thresholds chosen after seeing the Exchange's range; sensitivity only, not the live rule."
+ },
+ "agent_hit_rates": {
+  "Betting odds": {
+   "right": 22,
+   "calls": 50
+  },
+  "Borrowing": {
+   "right": 29,
+   "calls": 50
+  },
+  "Chart": {
+   "right": 27,
+   "calls": 50
+  },
+  "Crash": {
+   "right": 32,
+   "calls": 50
+  },
+  "ETF": {
+   "right": 24,
+   "calls": 50
+  },
+  "Long-term": {
+   "right": 20,
+   "calls": 41
+  },
+  "Miner": {
+   "right": 23,
+   "calls": 50
+  },
+  "Mood": {
+   "right": 22,
+   "calls": 50
+  },
+  "Network": {
+   "right": 28,
+   "calls": 50
+  },
+  "Stablecoin": {
+   "right": 16,
+   "calls": 50
+  },
+  "World economy": {
+   "right": 28,
+   "calls": 50
+  }
+ },
+ "stablecoin_walk_forward": {
+  "liquidity_train_end": "2026-01-14",
+  "depeg": "not retrained (ValueError; 49 rows before the window)"
+ },
+ "mood_llm": true
+}

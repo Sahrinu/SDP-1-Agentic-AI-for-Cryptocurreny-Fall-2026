@@ -1,0 +1,105 @@
+{
+ "name": "etf-rally-2024",
+ "label": null,
+ "days": 79,
+ "start": "2024-01-02",
+ "end": "2024-03-20",
+ "btc_change_pct": 45.73030715570881,
+ "max_drawdown_pct": -15.724933888578407,
+ "up_days": 45,
+ "mean_active_agents": 9.810126582278482,
+ "brier": {
+  "exchange": 0.2503606952710476,
+  "vote": 0.25311831249142885,
+  "average": 0.2503882942614867,
+  "constant_50": 0.25
+ },
+ "exchange_direction_hits": 37,
+ "always_down_hits": 34,
+ "mean_exchange": 0.5020941875550855,
+ "big_down_days": [
+  {
+   "day": "2024-01-11",
+   "change_pct": -7.674783056058853,
+   "exchange": 0.4879203593329689,
+   "vote": 0.5
+  },
+  {
+   "day": "2024-03-04",
+   "change_pct": -6.6256179326143805,
+   "exchange": 0.5144307223314384,
+   "vote": 0.75
+  },
+  {
+   "day": "2024-03-15",
+   "change_pct": -6.042056205876712,
+   "exchange": 0.4942533646480742,
+   "vote": 0.4444444444444444
+  },
+  {
+   "day": "2024-03-18",
+   "change_pct": -8.390165417862072,
+   "exchange": 0.4995858147476158,
+   "vote": 0.5555555555555556
+  }
+ ],
+ "mean_exchange_before_big_drops": 0.4990475652650243,
+ "boss_paper": {
+  "final_equity": 10000.0,
+  "return_pct": 0.0,
+  "trades": 0,
+  "buy_and_hold_pct": 45.73030715570881
+ },
+ "boss_paper_sensitivity": {
+  "final_equity": 10706.201476629933,
+  "return_pct": 7.062014766299328,
+  "trades": 3,
+  "buy_and_hold_pct": 45.73030715570881,
+  "buy_at": 0.52,
+  "sell_at": 0.46,
+  "note": "Thresholds chosen after seeing the Exchange's range; sensitivity only, not the live rule."
+ },
+ "agent_hit_rates": {
+  "Borrowing": {
+   "right": 34,
+   "calls": 79
+  },
+  "Chart": {
+   "right": 42,
+   "calls": 79
+  },
+  "Crash": {
+   "right": 24,
+   "calls": 59
+  },
+  "ETF": {
+   "right": 39,
+   "calls": 64
+  },
+  "Long-term": {
+   "right": 45,
+   "calls": 79
+  },
+  "Miner": {
+   "right": 42,
+   "calls": 79
+  },
+  "Network": {
+   "right": 41,
+   "calls": 79
+  },
+  "Stablecoin": {
+   "right": 45,
+   "calls": 79
+  },
+  "World economy": {
+   "right": 43,
+   "calls": 79
+  }
+ },
+ "stablecoin_walk_forward": {
+  "liquidity_train_end": "2024-01-01",
+  "depeg": "not retrained (ValueError; 0 rows before the window)"
+ },
+ "mood_llm": true
+}

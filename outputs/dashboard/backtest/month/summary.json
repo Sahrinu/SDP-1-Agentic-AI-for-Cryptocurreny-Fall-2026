@@ -1,0 +1,105 @@
+{
+ "name": "month",
+ "label": null,
+ "days": 30,
+ "start": "2026-10-26",
+ "end": "2026-11-24",
+ "btc_change_pct": -24.569447799241818,
+ "max_drawdown_pct": -27.527694284116123,
+ "up_days": 14,
+ "mean_active_agents": 12.766666666666667,
+ "brier": {
+  "exchange": 0.2506273004982351,
+  "vote": 0.3193918732782369,
+  "average": 0.25047853592113994,
+  "constant_50": 0.25
+ },
+ "exchange_direction_hits": 16,
+ "always_down_hits": 16,
+ "mean_exchange": 0.47075475585046134,
+ "big_down_days": [
+  {
+   "day": "2026-11-04",
+   "change_pct": -5.48544103579437,
+   "exchange": 0.477875675526393,
+   "vote": 0.2727272727272727
+  },
+  {
+   "day": "2026-11-13",
+   "change_pct": -6.0953830839944985,
+   "exchange": 0.46434917660904296,
+   "vote": 0.18181818181818182
+  }
+ ],
+ "mean_exchange_before_big_drops": 0.47111242606771797,
+ "boss_paper": {
+  "final_equity": 10000.0,
+  "return_pct": 0.0,
+  "trades": 0,
+  "buy_and_hold_pct": -24.569447799241818
+ },
+ "boss_paper_sensitivity": {
+  "final_equity": 10000.0,
+  "return_pct": 0.0,
+  "trades": 0,
+  "buy_and_hold_pct": -24.569447799241818,
+  "buy_at": 0.52,
+  "sell_at": 0.46,
+  "note": "Thresholds chosen after seeing the Exchange's range; sensitivity only, not the live rule."
+ },
+ "agent_hit_rates": {
+  "Betting odds": {
+   "right": 13,
+   "calls": 26
+  },
+  "Borrowing": {
+   "right": 14,
+   "calls": 30
+  },
+  "Chart": {
+   "right": 17,
+   "calls": 30
+  },
+  "Crash": {
+   "right": 16,
+   "calls": 30
+  },
+  "ETF": {
+   "right": 15,
+   "calls": 30
+  },
+  "Long-term": {
+   "right": 12,
+   "calls": 25
+  },
+  "Miner": {
+   "right": 13,
+   "calls": 30
+  },
+  "Mood": {
+   "right": 11,
+   "calls": 29
+  },
+  "Network": {
+   "right": 12,
+   "calls": 30
+  },
+  "News": {
+   "right": 15,
+   "calls": 27
+  },
+  "Stablecoin": {
+   "right": 14,
+   "calls": 30
+  },
+  "World economy": {
+   "right": 19,
+   "calls": 30
+  }
+ },
+ "stablecoin_walk_forward": {
+  "liquidity_train_end": "2026-10-25",
+  "depeg_train_end": "2026-10-24"
+ },
+ "mood_llm": true
+}

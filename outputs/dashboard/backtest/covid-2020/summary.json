@@ -1,0 +1,133 @@
+{
+ "name": "covid-2020",
+ "label": null,
+ "days": 56,
+ "start": "2020-02-15",
+ "end": "2020-04-10",
+ "btc_change_pct": -30.570172604576396,
+ "max_drawdown_pct": -52.77779690714246,
+ "up_days": 28,
+ "mean_active_agents": 8.0,
+ "brier": {
+  "exchange": 0.25324483374729034,
+  "vote": 0.2704081632653061,
+  "average": 0.2531227396826719,
+  "constant_50": 0.25
+ },
+ "exchange_direction_hits": 24,
+ "always_down_hits": 28,
+ "mean_exchange": 0.4918261209633128,
+ "big_down_days": [
+  {
+   "day": "2020-02-18",
+   "change_pct": -5.61668753953628,
+   "exchange": 0.5259371279357724,
+   "vote": 0.7142857142857143
+  },
+  {
+   "day": "2020-02-25",
+   "change_pct": -5.6955679788403435,
+   "exchange": 0.5002424081518392,
+   "vote": 0.5714285714285714
+  },
+  {
+   "day": "2020-03-07",
+   "change_pct": -9.602595350784204,
+   "exchange": 0.4966320338887372,
+   "vote": 0.42857142857142855
+  },
+  {
+   "day": "2020-03-11",
+   "change_pct": -39.50484717412017,
+   "exchange": 0.47624910723458475,
+   "vote": 0.42857142857142855
+  },
+  {
+   "day": "2020-03-13",
+   "change_pct": -7.287491485318897,
+   "exchange": 0.5004624686171022,
+   "vote": 0.5714285714285714
+  },
+  {
+   "day": "2020-03-15",
+   "change_pct": -6.198683155204899,
+   "exchange": 0.4683014910674243,
+   "vote": 0.2857142857142857
+  },
+  {
+   "day": "2020-03-21",
+   "change_pct": -5.993069316532463,
+   "exchange": 0.4809061726616458,
+   "vote": 0.42857142857142855
+  },
+  {
+   "day": "2020-03-26",
+   "change_pct": -5.614216844580078,
+   "exchange": 0.48201248184913353,
+   "vote": 0.42857142857142855
+  },
+  {
+   "day": "2020-03-28",
+   "change_pct": -5.695846327756082,
+   "exchange": 0.5188193370145838,
+   "vote": 0.7142857142857143
+  },
+  {
+   "day": "2020-04-09",
+   "change_pct": -5.829857459422206,
+   "exchange": 0.5024115811005155,
+   "vote": 0.5714285714285714
+  }
+ ],
+ "mean_exchange_before_big_drops": 0.49519742095213387,
+ "boss_paper": {
+  "final_equity": 10000.0,
+  "return_pct": 0.0,
+  "trades": 0,
+  "buy_and_hold_pct": -30.570172604576396
+ },
+ "boss_paper_sensitivity": {
+  "final_equity": 9060.841502109946,
+  "return_pct": -9.39158497890054,
+  "trades": 3,
+  "buy_and_hold_pct": -30.570172604576396,
+  "buy_at": 0.52,
+  "sell_at": 0.46,
+  "note": "Thresholds chosen after seeing the Exchange's range; sensitivity only, not the live rule."
+ },
+ "agent_hit_rates": {
+  "Chart": {
+   "right": 28,
+   "calls": 56
+  },
+  "Crash": {
+   "right": 28,
+   "calls": 56
+  },
+  "Long-term": {
+   "right": 32,
+   "calls": 56
+  },
+  "Miner": {
+   "right": 31,
+   "calls": 56
+  },
+  "Network": {
+   "right": 25,
+   "calls": 56
+  },
+  "Stablecoin": {
+   "right": 28,
+   "calls": 56
+  },
+  "World economy": {
+   "right": 24,
+   "calls": 56
+  }
+ },
+ "stablecoin_walk_forward": {
+  "liquidity_train_end": "2020-02-14",
+  "depeg": "not retrained (ValueError; 0 rows before the window)"
+ },
+ "mood_llm": true
+}
